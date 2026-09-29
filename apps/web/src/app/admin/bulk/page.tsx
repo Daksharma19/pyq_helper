@@ -12,8 +12,9 @@ export default async function BulkPage() {
       <h1 className="text-2xl font-bold">Bulk upload</h1>
       <div className="space-y-2 text-sm text-slate-600 dark:text-slate-400">
         <p>
-          Pick the PDFs (or a whole folder) and a CSV with one row per paper. The <code>file</code>{" "}
-          column must match a PDF&apos;s file name. Columns:
+          Pick the paper files (or a whole folder) and a CSV with one row per paper. Files can be
+          PDFs, photos or documents; anything that isn&apos;t a PDF is converted first. The{" "}
+          <code>file</code> column must match a file name. Columns:
         </p>
         <pre className="overflow-x-auto rounded-md bg-slate-100 p-3 text-xs dark:bg-slate-900">
           {BULK_COLUMNS.join(",")}

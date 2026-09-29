@@ -2,17 +2,8 @@ import "server-only";
 import path from "node:path";
 import { createWorker, type Worker } from "tesseract.js";
 import { extractText, getDocumentProxy, renderPageAsImage } from "unpdf";
-import { looksLikePdf, MAX_PDF_BYTES } from "@pyq/shared";
 
-/** Reads and checks an uploaded file. Returns its bytes, or an error message. */
-export async function readPdf(
-  file: FormDataEntryValue | null,
-): Promise<{ bytes: Uint8Array<ArrayBuffer> } | { error: string }> {
-  if (!(file instanceof File) || file.size === 0) return { error: "Choose a PDF file." };
-  if (file.size > MAX_PDF_BYTES) return { error: "PDF is larger than 20 MB." };
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  return looksLikePdf(bytes) ? { bytes } : { error: "That file is not a PDF." };
-}
+// Reading uploads (type detection, conversion to PDF, validation) is in lib/paper-file.ts.
 
 export type TextSource = "text-layer" | "ocr" | "none";
 

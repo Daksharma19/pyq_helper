@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { parseBulkCsv, type BulkRow } from "@pyq/shared";
 import { createPaper } from "@/app/admin/actions";
+import { ACCEPT, hasSupportedExtension } from "@/lib/upload-formats";
 import { Notice } from "@/components/admin/notice";
 import { btnPrimary } from "@/components/admin/styles";
 
@@ -31,7 +32,8 @@ export function BulkUpload() {
 
   function pickPdfs(files: FileList | null) {
     const map = new Map<string, File>();
-    for (const f of files ?? []) if (f.name.toLowerCase().endsWith(".pdf")) map.set(f.name, f);
+    // PDFs, images and documents; other files in a picked folder (CSV, notes) are ignored.
+    for (const f of files ?? []) if (hasSupportedExtension(f.name)) map.set(f.name, f);
     setPdfs(map);
     setStatus({});
   }
@@ -63,17 +65,17 @@ export function BulkUpload() {
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-3">
         <label className="text-sm">
-          <span className="mb-1 block font-medium">PDF files</span>
+          <span className="mb-1 block font-medium">Paper files</span>
           <input
             type="file"
             multiple
-            accept="application/pdf,.pdf"
+            accept={ACCEPT}
             onChange={(e) => pickPdfs(e.target.files)}
             className={fileInputCls}
           />
         </label>
         <label className="text-sm">
-          <span className="mb-1 block font-medium">…or a folder of PDFs</span>
+          <span className="mb-1 block font-medium">…or a whole folder</span>
           <input
             type="file"
             // Non-standard but supported by all major browsers.
@@ -97,7 +99,7 @@ export function BulkUpload() {
       </div>
 
       <p className="text-sm text-slate-500">
-        {pdfs.size} PDF{pdfs.size === 1 ? "" : "s"} selected
+        {pdfs.size} file{pdfs.size === 1 ? "" : "s"} selected
         {parsed && !parsed.error && ` · ${rows.length} rows · ${valid.length} ready`}
       </p>
       {parsed?.error && <Notice kind="error">{parsed.error}</Notice>}

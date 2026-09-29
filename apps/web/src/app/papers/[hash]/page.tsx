@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { preload } from "react-dom";
 import { paperFileName } from "@pyq/db";
 import { PAPER_HASH_RE } from "@pyq/shared";
 import { getPublicPaper } from "@/lib/public-data";
 import { paperUrl } from "@/lib/supabase";
+import { PdfViewer } from "@/components/pdf-viewer";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +32,9 @@ export default async function PaperPage({ params }: Props) {
   const fileName = paperFileName(paper);
   const viewUrl = paperUrl(paper.storage_path);
   const downloadUrl = paperUrl(paper.storage_path, fileName);
+  // Start downloading the PDF with the HTML, in parallel with the viewer's JavaScript.
+  // Matches pdf.js's request (CORS, same-origin credentials) so the browser reuses it.
+  preload(viewUrl, { as: "fetch", crossOrigin: "anonymous" });
   const stats: [string, string | number][] = [
     ["Term", paper.term],
     ["Year", paper.year],
@@ -73,17 +78,7 @@ export default async function PaperPage({ params }: Props) {
           Open PDF
         </a>
       </div>
-      {/* Mobile browsers rarely render embedded PDFs; phones use "Open PDF" instead. */}
-      <object
-        data={viewUrl}
-        type="application/pdf"
-        className="hidden h-[80vh] w-full rounded-lg border border-slate-200 sm:block dark:border-slate-800"
-        aria-label="Paper preview"
-      >
-        <p className="p-4 text-sm">
-          Preview unavailable. <a href={viewUrl}>Open the PDF</a>.
-        </p>
-      </object>
+      <PdfViewer url={viewUrl} title={`${paper.course.title} ${paper.term} ${paper.year}`} />
     </article>
   );
 }

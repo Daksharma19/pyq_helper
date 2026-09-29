@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { paperInputSchema, TERMS, type Course, type ExtractedMeta } from "@pyq/shared";
 import { analyzePaper, createPaper, type Analysis } from "@/app/admin/actions";
 import type { TextSource } from "@/lib/pipeline";
+import { ACCEPT, precheckUpload } from "@/lib/upload-formats";
 import { btnPrimary, btnSecondary, inputCls } from "@/components/admin/styles";
 
 type Fields = Record<"course_code" | "term" | "year" | "total_marks" | "num_questions", string>;
@@ -17,7 +18,10 @@ type Item = {
   /** Fields the pipeline read from the PDF (the rest need typing in). */
   found: Set<keyof Fields>;
   source?: TextSource;
-  /** SHA-256 of the PDF bytes, from the server. */
+  /** Set when the upload was converted to PDF, e.g. "JPEG image". */
+  convertedFrom?: string;
+  pages?: number;
+  /** SHA-256 of the uploaded file, from the server. */
   fileHash?: string;
   /** SHA-256 of course|term|year: the paper's id, once those were read. */
   paperHash?: string;
@@ -42,8 +46,9 @@ function toFields(meta: ExtractedMeta): Fields {
 }
 
 /**
- * Drop PDFs → each goes through the pipeline (hash, text/OCR-layer extraction, duplicate
- * check) → admin reviews the pre-filled fields → save. Nothing is stored before "Save".
+ * Drop files (PDFs, photos, documents) → each goes through the pipeline (hash, duplicate
+ * check, conversion to PDF, validation, text/OCR extraction, identity hash) → admin reviews
+ * the pre-filled fields → save. Nothing is stored before "Save".
  */
 export function UploadQueue({ courses }: { courses: Course[] }) {
   const [items, setItems] = useState<Item[]>([]);
@@ -54,18 +59,22 @@ export function UploadQueue({ courses }: { courses: Course[] }) {
     setItems((list) => list.map((it) => (it.key === key ? { ...it, ...p } : it)));
 
   async function add(files: Iterable<File>) {
-    const fresh: Item[] = [...files]
-      .filter((f) => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf"))
-      .map((file) => ({
+    // Every file gets a card; the server decides what's supported. Only empty and oversized
+    // files are rejected here, before wasting an upload.
+    const fresh: Item[] = [...files].map((file) => {
+      const problem = precheckUpload(file);
+      return {
         key: `${file.name}-${file.size}-${file.lastModified}-${Math.random()}`,
         file,
-        status: "analyzing",
+        status: problem ? "error" : "analyzing",
+        message: problem ?? undefined,
         values: toFields({}),
         found: new Set(),
-      }));
+      };
+    });
     setItems((list) => [...fresh, ...list]);
     // One at a time keeps the server load and the UI predictable.
-    for (const it of fresh) {
+    for (const it of fresh.filter((f) => f.status === "analyzing")) {
       const form = new FormData();
       form.set("file", it.file);
       let res: Analysis;
@@ -83,13 +92,15 @@ export function UploadQueue({ courses }: { courses: Course[] }) {
         values,
         found: new Set(FIELDS.filter((f) => values[f] !== "")),
         source: res.duplicate?.reason === "file" ? undefined : res.source,
+        convertedFrom: res.convertedFrom,
+        pages: res.pages,
         fileHash: res.fileHash,
         paperHash: res.paperHash,
         status: res.duplicate ? "duplicate" : "review",
         link: res.duplicate?.hash,
         message: res.duplicate
           ? res.duplicate.reason === "file"
-            ? `This exact PDF is already stored as ${res.duplicate.label}.`
+            ? `This exact file is already stored as ${res.duplicate.label}.`
             : `${res.duplicate.label} already exists.`
           : undefined,
       });
@@ -146,15 +157,17 @@ export function UploadQueue({ courses }: { courses: Course[] }) {
             : "border-slate-300 hover:border-brand-600 dark:border-slate-700"
         }`}
       >
-        <p className="font-medium">Drop paper PDFs here, or click to choose</p>
+        <p className="font-medium">Drop papers here, or click to choose</p>
         <p className="mt-1 text-sm text-slate-500">
-          Course, term, year, marks and questions are read from each PDF. Check them, then save.
+          PDFs, photos or scans (JPG, PNG, WebP, TIFF) and documents (DOCX, ODT, PPTX…). Other
+          formats are converted to PDF first. Course, term, year, marks and questions are read from
+          each paper; check them, then save.
         </p>
         <input
           ref={input}
           type="file"
           multiple
-          accept="application/pdf,.pdf"
+          accept={ACCEPT}
           className="hidden"
           onChange={(e) => {
             if (e.target.files) add(e.target.files);
@@ -235,6 +248,8 @@ function QueueItem({
                 · file {item.fileHash.slice(0, 12)}…
               </span>
             )}
+            {item.convertedFrom && ` · converted from ${item.convertedFrom}`}
+            {item.pages !== undefined && ` · ${item.pages} page${item.pages === 1 ? "" : "s"}`}
             {item.source && ` · ${SOURCE_NOTE[item.source]}`}
           </p>
         </div>
@@ -243,8 +258,8 @@ function QueueItem({
 
       {item.status === "analyzing" && (
         <p className="text-sm text-slate-500">
-          Hashing, checking for duplicates and reading the paper. Scans without a text layer go
-          through OCR, which takes a few seconds per page.
+          Checking the file, converting it to PDF if needed, and reading the paper. Scans without a
+          text layer go through OCR, which takes a few seconds per page.
         </p>
       )}
 

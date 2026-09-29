@@ -10,6 +10,7 @@ export default tseslint.config(
       "**/node_modules/**",
       "**/*.types.ts",
       "**/generated/**",
+      "**/public/pdfjs/**",
       "next-env.d.ts",
     ],
   },

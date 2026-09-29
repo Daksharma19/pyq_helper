@@ -4,6 +4,7 @@ import Link from "next/link";
 import { startTransition, useActionState, useState } from "react";
 import { SEMESTERS, TERMS, type Course } from "@pyq/shared";
 import type { FormState } from "@/app/admin/actions";
+import { ACCEPT } from "@/lib/upload-formats";
 import { Notice } from "./notice";
 import { btnPrimary, errorCls, inputCls } from "./styles";
 
@@ -138,11 +139,13 @@ export function PaperForm({ courses, action, initial = {} }: Props) {
       </div>
 
       <label className="block text-sm">
-        <span className="mb-1 block font-medium">Replace PDF (optional)</span>
+        <span className="mb-1 block font-medium">
+          Replace file (optional: PDF, photo or document, converted to PDF)
+        </span>
         <input
           name="file"
           type="file"
-          accept="application/pdf,.pdf"
+          accept={ACCEPT}
           className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:font-medium dark:file:bg-slate-800"
         />
         {err.file && <span className={errorCls}>{err.file}</span>}

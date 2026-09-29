@@ -30,12 +30,15 @@ import {
   type ExtractedMeta,
 } from "@pyq/shared";
 import { requireAdmin } from "@/lib/auth";
-import { paperText, readPdf, type TextSource } from "@/lib/pipeline";
+import { readPaperFile } from "@/lib/paper-file";
+import { paperText, type TextSource } from "@/lib/pipeline";
+import { precheckUpload } from "@/lib/upload-formats";
 import { TAGS } from "@/lib/public-data";
 
 // A paper's identity is paper_hash = SHA-256("COURSE|TERM|YEAR"), computed from the metadata
 // (read from the PDF, confirmed by the admin). It is the duplicate check and the URL id.
-// file_hash = SHA-256 of the PDF bytes additionally stops the same file being stored twice.
+// file_hash = SHA-256 of the uploaded file additionally stops the same file (PDF, photo or
+// document) being stored twice. Non-PDF uploads are converted to PDF first (lib/paper-file.ts).
 
 export type FormState = {
   ok?: boolean;
@@ -86,21 +89,27 @@ export type Analysis =
       meta: ExtractedMeta;
       /** Where the text came from; "none" means nothing could be read. */
       source: TextSource;
+      /** Set when the upload was converted, e.g. "JPEG image". */
+      convertedFrom?: string;
+      pages?: number;
       duplicate?: { hash: string; label: string; reason: "file" | "paper" };
     };
 
 /**
  * Pipeline step 1 (nothing is stored):
- * 1. validate the PDF and hash its bytes; stop if that exact file is already stored;
- * 2. read its text (text layer, else OCR) and extract course, term, year, marks, questions;
- * 3. hash the extracted identity (course|term|year) and check whether that paper exists.
+ * 1. hash the uploaded bytes; stop if that exact file is already stored (before any work);
+ * 2. detect the real type, convert to PDF locally if needed, validate the PDF;
+ * 3. read its text (text layer, else OCR) and extract course, term, year, marks, questions;
+ * 4. hash the extracted identity (course|term|year) and check whether that paper exists.
  */
 export async function analyzePaper(form: FormData): Promise<Analysis> {
   const { query } = await requireAdmin("/admin/papers/new");
-  const pdf = await readPdf(form.get("file"));
-  if ("error" in pdf) return pdf;
+  const file = form.get("file");
+  if (!(file instanceof File)) return { error: "Choose a file." };
+  const pre = precheckUpload(file);
+  if (pre) return { error: pre };
 
-  const fileHash = sha256(pdf.bytes);
+  const fileHash = sha256(new Uint8Array(await file.arrayBuffer()));
   const sameFile = await query((db) => findPaperByFile(db, fileHash));
   if (sameFile) {
     const { course_code, term, year, paper_hash } = sameFile;
@@ -115,20 +124,24 @@ export async function analyzePaper(form: FormData): Promise<Analysis> {
 
   // Sequential on purpose: PDF rendering/OCR blocks the event loop for seconds, and a DB
   // transaction waiting behind it would time out.
+  const pdf = await readPaperFile(file);
+  if ("error" in pdf) return pdf;
+  const converted = { convertedFrom: pdf.convertedFrom, pages: pdf.pages };
+
   const courses = await query(listCourses);
-  const { text, source } = await paperText(pdf.bytes);
+  const { text, source } = await paperText(pdf.pdf);
   const meta = extractPaperMeta(text, courses);
   const key = paperInputSchema()
     .pick({ course_code: true, term: true, year: true })
     .safeParse(meta);
-  if (!key.success) return { fileHash, meta, source };
+  if (!key.success) return { fileHash, meta, source, ...converted };
 
   const identity = paperHash(key.data);
   const samePaper = await query((db) => findPaper(db, key.data));
   const duplicate = samePaper
     ? { hash: samePaper.paper_hash, label: label(samePaper), reason: "paper" as const }
     : undefined;
-  return { fileHash, paperHash: identity, meta, source, duplicate };
+  return { fileHash, paperHash: identity, meta, source, duplicate, ...converted };
 }
 
 /**
@@ -141,14 +154,14 @@ export async function createPaper(_: FormState | null, form: FormData): Promise<
   const { query, storage } = await requireAdmin();
   const values = formValues(form);
   const parsed = paperInputSchema().safeParse(values);
-  const pdf = await readPdf(form.get("file"));
+  const pdf = await readPaperFile(form.get("file"));
   if (!parsed.success || "error" in pdf) {
     const errors = parsed.success ? {} : firstIssues(parsed.error);
     if ("error" in pdf) errors.file = pdf.error;
     return { errors, values };
   }
   const input = parsed.data;
-  const file_hash = sha256(pdf.bytes);
+  const file_hash = pdf.sourceHash;
 
   const [sameFile, samePaper] = await query((db) =>
     Promise.all([findPaperByFile(db, file_hash), findPaper(db, input)]),
@@ -161,7 +174,7 @@ export async function createPaper(_: FormState | null, form: FormData): Promise<
 
   const path = newStoragePath(input);
   try {
-    await uploadPdf(storage, path, pdfBlob(pdf.bytes));
+    await uploadPdf(storage, path, pdfBlob(pdf.pdf));
   } catch {
     return { errors: { file: "Upload failed. Try again." }, values };
   }
@@ -196,7 +209,7 @@ export async function editPaper(hash: string, _: FormState, form: FormData): Pro
 
   const parsed = paperInputSchema().safeParse(values);
   const file = form.get("file");
-  const pdf = file instanceof File && file.size > 0 ? await readPdf(file) : undefined;
+  const pdf = file instanceof File && file.size > 0 ? await readPaperFile(file) : undefined;
   if (!parsed.success || (pdf && "error" in pdf)) {
     const errors = parsed.success ? {} : firstIssues(parsed.error);
     if (pdf && "error" in pdf) errors.file = pdf.error;
@@ -210,8 +223,8 @@ export async function editPaper(hash: string, _: FormState, form: FormData): Pro
   }
 
   let replacement: { storage_path: string; file_hash: string } | undefined;
-  if (pdf && "bytes" in pdf) {
-    const file_hash = sha256(pdf.bytes);
+  if (pdf && "sourceHash" in pdf) {
+    const file_hash = pdf.sourceHash;
     const sameFile = await query((db) => findPaperByFile(db, file_hash));
     if (sameFile && sameFile.paper_hash !== hash) {
       const errors = { file: `${SAME_FILE} (${label(sameFile)}).` };
@@ -219,7 +232,7 @@ export async function editPaper(hash: string, _: FormState, form: FormData): Pro
     }
     if (file_hash !== current.file_hash) {
       replacement = { storage_path: newStoragePath(input), file_hash };
-      await uploadPdf(storage, replacement.storage_path, pdfBlob(pdf.bytes));
+      await uploadPdf(storage, replacement.storage_path, pdfBlob(pdf.pdf));
     }
   }
 

@@ -51,3 +51,14 @@
 - **Local Supabase runs 4 containers** (db, auth, storage, kong). PostgREST, Realtime, Edge Functions, Analytics/Vector, Studio/pg-meta and Mailpit are disabled in `config.toml` because the app doesn't use them. Set `enabled = true` to bring one back (e.g. Studio for browsing the DB, or SMTP for Phase 3 magic links).
 - **Em dashes removed** from code, UI and config. Course labels read "Title (CODE)". En dashes in number ranges ("2000–2100") are kept.
 - **RLS integration test uses its own fixtures** (course `99Z99ZZ999`) and cleans up, so it passes with any data in the DB.
+
+### PDF viewer and format conversion
+
+- **Paper preview = our own pdf.js viewer** (`components/pdf-viewer.tsx`), replacing `<object>`: pages flow in the normal page scroll (no nested scroller), are pre-sized (no layout shift), render lazily (about 1.5 screens ahead) and are released far away. Zoom stretches the current canvas instantly, then swaps in a crisp re-render with no blank frame, and keeps the point under the viewport centre in place. Ctrl/⌘+wheel and + − 0 zoom the paper. It works on phones (the old preview was hidden there).
+- **pdf.js assets are self-hosted** under `public/pdfjs/<version>/` (copied by `scripts/copy-pdfjs.mjs` before dev/build, gitignored), served with year-long immutable caching. Includes wasm decoders (JPEG 2000 scans), standard fonts, cMaps and ICC profiles.
+- **The PDF is preloaded** with the HTML (`preload(..., { as: "fetch", crossOrigin })`), and pdf.js reuses that response. Range requests aren't possible cross-origin (storage doesn't expose `Content-Range`), and for scans page 1 is most of the file anyway.
+- **Measure before observing:** the viewer measures its width with `getBoundingClientRect` before first paint and checks nearness on mount. ResizeObserver/IntersectionObserver never fire in background tabs, so a paper opened in a new background tab would otherwise stay blank. pdf.js itself pauses drawing while hidden, which is intended.
+- **Other formats → PDF, locally**: images via sharp + pdf-lib (deterministic output), documents via headless LibreOffice if installed (private profile per run, 90 s timeout, one at a time). LibreOffice isn't installed on the dev machine, so the DOCX path is tested only up to the "not installed" message. Install it to enable (README "Uploads").
+- **`file_hash` = hash of the uploaded bytes**, not of the generated PDF.
+- **HEIC isn't supported** (sharp's prebuilt binaries can't decode HEVC); the message tells the admin to export as JPEG.
+- **Web unit tests** run real conversions in memory (`paper-file.test.ts`, `upload-formats.test.ts`); `server-only` is stubbed in Vitest.

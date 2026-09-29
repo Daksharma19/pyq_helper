@@ -2,3 +2,4 @@ pnpm-lock.yaml
 .next
 packages/db/src/generated
 packages/db/prisma/schema.prisma
+apps/web/public/pdfjs
