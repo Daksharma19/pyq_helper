@@ -1,0 +1,30 @@
+{
+  "name": "@pyq/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc",
+    "test": "vitest run",
+    "db:start": "supabase start --workdir .",
+    "db:stop": "supabase stop --workdir .",
+    "db:reset": "supabase db reset --workdir .",
+    "db:types": "supabase gen types typescript --local --workdir . --schema public > src/database.types.ts",
+    "seed:pdfs": "node scripts/make-sample-pdfs.mjs",
+    "seed:hosted": "node --env-file=.env scripts/seed-hosted.mjs"
+  },
+  "dependencies": {
+    "@pyq/shared": "workspace:*",
+    "@supabase/supabase-js": "^2.58.0"
+  },
+  "devDependencies": {
+    "@pyq/config": "workspace:*",
+    "eslint": "^9.36.0",
+    "pdf-lib": "^1.17.1",
+    "supabase": "^2.118.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

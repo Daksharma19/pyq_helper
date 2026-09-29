@@ -1,0 +1,1 @@
+{ "extends": "@pyq/config/tsconfig/base.json", "include": ["src"] }
