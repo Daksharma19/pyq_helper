@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { listPapers } from "@pyq/db";
 import { SEMESTERS } from "@pyq/shared";
-import { db } from "@/lib/supabase";
+import { publicQuery } from "@/lib/db";
 import { PaperCard } from "@/components/paper-card";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const recent = await listPapers(db(), {}, 6);
+  const recent = await publicQuery((db) => listPapers(db, {}, 6));
 
   return (
     <div className="space-y-10">

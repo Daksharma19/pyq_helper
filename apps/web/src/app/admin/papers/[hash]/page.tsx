@@ -1,23 +1,29 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { z } from "zod";
 import { getAnyPaper, listCourses } from "@pyq/db";
+import { PAPER_HASH_RE } from "@pyq/shared";
 import { requireAdmin } from "@/lib/auth";
 import { paperUrl } from "@/lib/supabase";
 import { editPaper } from "@/app/admin/actions";
+import { Notice } from "@/components/admin/notice";
 import { PaperForm } from "@/components/admin/paper-form";
 import { PaperControls } from "./paper-controls";
 
 export const metadata: Metadata = { title: "Edit paper" };
 
-type Props = { params: Promise<{ id: string }> };
+type Props = {
+  params: Promise<{ hash: string }>;
+  searchParams: Promise<{ moved?: string }>;
+};
 
-export default async function EditPaperPage({ params }: Props) {
-  const { id } = await params;
-  const { db } = await requireAdmin(`/admin/papers/${id}`);
-  if (!z.uuid().safeParse(id).success) notFound();
-  const [paper, courses] = await Promise.all([getAnyPaper(db, id), listCourses(db)]);
+export default async function EditPaperPage({ params, searchParams }: Props) {
+  const { hash } = await params;
+  const { query } = await requireAdmin(`/admin/papers/${hash}`);
+  if (!PAPER_HASH_RE.test(hash)) notFound();
+  const [paper, courses] = await query((db) =>
+    Promise.all([getAnyPaper(db, hash), listCourses(db)]),
+  );
   if (!paper) notFound();
 
   const initial = {
@@ -50,20 +56,23 @@ export default async function EditPaperPage({ params }: Props) {
           {paper.published && (
             <>
               {" · "}
-              <Link href={`/papers/${paper.id}`} className="underline">
+              <Link href={`/papers/${paper.paper_hash}`} className="underline">
                 Public page
               </Link>
             </>
           )}
         </p>
+        <p className="font-mono text-xs break-all text-slate-400">
+          <span title="SHA-256 of course|term|year: this paper's id">id {paper.paper_hash}</span>
+          <br />
+          <span title="SHA-256 of the PDF bytes">file {paper.file_hash}</span>
+        </p>
       </div>
-      <PaperForm
-        courses={courses}
-        action={editPaper.bind(null, id)}
-        initial={initial}
-        mode="edit"
-      />
-      <PaperControls id={id} published={paper.published} />
+      {(await searchParams).moved && (
+        <Notice>Saved. Course, term or year changed, so the paper has a new id and URL.</Notice>
+      )}
+      <PaperForm courses={courses} action={editPaper.bind(null, hash)} initial={initial} />
+      <PaperControls hash={hash} published={paper.published} />
     </div>
   );
 }

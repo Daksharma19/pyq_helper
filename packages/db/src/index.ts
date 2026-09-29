@@ -1,3 +1,5 @@
+export * from "./client";
 export * from "./queries";
 export * from "./admin";
-export type { Database } from "./database.types";
+export * from "./storage";
+export * from "./hash";

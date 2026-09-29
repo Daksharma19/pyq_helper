@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { startTransition, useActionState, useEffect, useRef, useState } from "react";
+import { startTransition, useActionState, useState } from "react";
 import { SEMESTERS, TERMS, type Course } from "@pyq/shared";
 import type { FormState } from "@/app/admin/actions";
 import { Notice } from "./notice";
@@ -11,24 +11,14 @@ type Props = {
   courses: Course[];
   action: (state: FormState, form: FormData) => Promise<FormState>;
   initial?: Record<string, string>;
-  mode: "create" | "edit";
 };
 
-/** Upload / edit form. Semester only narrows the course list; a paper's semester is its course's. */
-export function PaperForm({ courses, action, initial = {}, mode }: Props) {
+/** Edit form (new papers go through the upload queue). Semester only narrows the course list; a paper's semester is its course's. */
+export function PaperForm({ courses, action, initial = {} }: Props) {
   const [state, formAction, pending] = useActionState(action, { values: initial });
   const v = state.values ?? initial;
   const courseSemester = (code?: string) => courses.find((c) => c.code === code)?.semester;
   const [semester, setSemester] = useState(String(courseSemester(v.course_code) ?? ""));
-  const formRef = useRef<HTMLFormElement>(null);
-
-  // After a successful create, clear the file input so the next paper can be added quickly.
-  useEffect(() => {
-    if (mode === "create" && state.ok) {
-      const file = formRef.current?.elements.namedItem("file") as HTMLInputElement | null;
-      if (file) file.value = "";
-    }
-  }, [state, mode]);
 
   const visible = semester ? courses.filter((c) => String(c.semester) === semester) : courses;
   const err = state.errors ?? {};
@@ -37,7 +27,6 @@ export function PaperForm({ courses, action, initial = {}, mode }: Props) {
 
   return (
     <form
-      ref={formRef}
       // Submit manually: React's automatic form reset would drop the chosen file on errors.
       onSubmit={(e) => {
         e.preventDefault();
@@ -46,21 +35,12 @@ export function PaperForm({ courses, action, initial = {}, mode }: Props) {
       }}
       className="space-y-4"
     >
-      {state.message && (
-        <Notice>
-          {state.message}{" "}
-          {state.createdId && (
-            <Link href={`/admin/papers/${state.createdId}`} className="underline">
-              View
-            </Link>
-          )}
-        </Notice>
-      )}
-      {err._ && (
+      {state.message && <Notice>{state.message}</Notice>}
+      {(err._ || state.existing) && (
         <Notice kind="error">
-          {err._}{" "}
-          {state.existingId && (
-            <Link href={`/admin/papers/${state.existingId}`} className="font-medium underline">
+          {err._ ?? "Conflicts with another paper."}{" "}
+          {state.existing && (
+            <Link href={`/admin/papers/${state.existing}`} className="font-medium underline">
               Open the existing paper
             </Link>
           )}
@@ -158,21 +138,18 @@ export function PaperForm({ courses, action, initial = {}, mode }: Props) {
       </div>
 
       <label className="block text-sm">
-        <span className="mb-1 block font-medium">
-          {mode === "create" ? "PDF" : "Replace PDF (optional)"}
-        </span>
+        <span className="mb-1 block font-medium">Replace PDF (optional)</span>
         <input
           name="file"
           type="file"
           accept="application/pdf,.pdf"
-          required={mode === "create"}
           className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:font-medium dark:file:bg-slate-800"
         />
         {err.file && <span className={errorCls}>{err.file}</span>}
       </label>
 
       <button disabled={pending} className={btnPrimary}>
-        {pending ? "Saving…" : mode === "create" ? "Upload paper" : "Save changes"}
+        {pending ? "Saving…" : "Save changes"}
       </button>
     </form>
   );

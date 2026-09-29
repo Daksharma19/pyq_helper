@@ -26,4 +26,16 @@
 - **Course codes can't be edited** (they are the key). Courses with papers can't be deleted (FK); the UI hides the button.
 - **Bulk upload** calls the same `createPaper` server action row by row, so it has one validation path.
 - **`turbo build` now depends on `typecheck`**: running both in parallel raced on `.next/types`.
-- **Real scans in `/papers`** are gitignored: they show students' names and enrollment numbers. Metadata was read from the scanner's embedded OCR text layer and loaded into the local DB only.
+- **Real scans in `/papers` and `/toput`** are gitignored: they show students' names and enrollment numbers. They were loaded into the local DB only, through the admin upload pipeline.
+
+### Phase 2b: upload pipeline, hash ids, Prisma (owner's requests)
+
+- **Paper identity = `paper_hash` = SHA-256 of `COURSE|TERM|YEAR`**, computed from the extracted metadata (owner's choice). It is a Postgres generated column, so the DB owns it. `file_hash` (SHA-256 of the bytes) is kept as a second unique check against re-uploading the same file. See docs/decisions/0003.
+- **Full 64-hex hashes in URLs** (not a shortened prefix): unambiguous, with no collision handling needed. Malformed ids return 404 before any query runs.
+- **OCR = tesseract.js in the Next server**, used only when a PDF has no usable text layer (under 40 characters). Pages 1–2 at 2× scale. One shared worker. Language data is cached in `apps/web/.cache/tesseract`.
+- **Question count** = max(highest OCR-tolerant `Q<n>`, number of `[nM]` marks tags). The maths T2 2023 paper has **6** questions (Q6 is on page 2). An earlier manual reading of 5 was wrong.
+- **Never hold a DB transaction across OCR**: pdf.js rendering blocks the event loop, and the first version timed out (Prisma P2028). Courses are loaded before OCR, and transactions get explicit `maxWait`/`timeout`.
+- **`unpdf`, `tesseract.js`, `@napi-rs/canvas` are `serverExternalPackages`**: they locate their own files or native binaries at runtime, and bundling them broke `import.meta` use.
+- **Prisma 7.10 (stable)**, not the 8.0 RC that npm's `latest` tag points to. Prisma is used for queries only; SQL migrations remain the schema source of truth, and `schema.prisma` is introspected. RLS is enforced via `withCaller` (role and JWT claims set per transaction). See docs/decisions/0004.
+- **`prisma.config.ts` reads `DATABASE_URL` optionally** so `prisma generate` (postinstall, CI) works without a database.
+- **Deleting papers**: from the list (row button, or checkboxes → Delete selected, up to 200) and from the edit page. It's all or nothing: if any paper is missing or refused, nothing is deleted. Rows are deleted first, then the PDFs (best effort).

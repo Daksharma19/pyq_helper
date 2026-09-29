@@ -1,123 +1,118 @@
 import type { Course, PaperInput, PaperWithCourse, Term } from "@pyq/shared";
-import { PAPER_SELECT, PAPERS_BUCKET, type Client } from "./queries";
+import type { Db } from "./client";
+import { paperHash, type PaperKey } from "./hash";
 
-// Admin queries. They run with the signed-in user's client, so RLS decides what is allowed.
+// Admin queries. They run as the signed-in user (withCaller), so RLS decides what is allowed.
+// Papers are addressed by paper_hash (hash of course/term/year, their URL id); the uuid
+// primary key stays internal. file_hash (hash of the PDF bytes) catches re-uploaded files.
 
-export async function isAdmin(db: Client): Promise<boolean> {
-  const { data, error } = await db.rpc("is_admin");
-  if (error) throw error;
-  return data;
+/** Enough to identify and label a paper. */
+export type PaperRef = {
+  paper_hash: string;
+  file_hash: string;
+  course_code: string;
+  term: Term;
+  year: number;
+};
+const REF = { paper_hash: true, file_hash: true, course_code: true, term: true, year: true };
+
+export async function isAdmin(db: Db): Promise<boolean> {
+  const [row] = await db.$queryRaw<{ is_admin: boolean }[]>`select public.is_admin() as is_admin`;
+  return row?.is_admin === true;
 }
 
 /** All papers including unpublished, newest first. */
-export async function listAllPapers(
-  db: Client,
+export function listAllPapers(
+  db: Db,
   filters: { course?: string; published?: boolean } = {},
   limit = 200,
 ): Promise<PaperWithCourse[]> {
-  let q = db.from("papers").select(PAPER_SELECT);
-  if (filters.course) q = q.eq("course_code", filters.course);
-  if (filters.published !== undefined) q = q.eq("published", filters.published);
-  const { data, error } = await q.order("created_at", { ascending: false }).limit(limit);
-  if (error) throw error;
-  return data;
+  return db.papers.findMany({
+    where: { course_code: filters.course, published: filters.published },
+    include: { course: true },
+    orderBy: { created_at: "desc" },
+    take: limit,
+  });
 }
 
-export async function getAnyPaper(db: Client, id: string): Promise<PaperWithCourse | null> {
-  const { data, error } = await db.from("papers").select(PAPER_SELECT).eq("id", id).maybeSingle();
-  if (error) throw error;
-  return data;
+/** Any paper (published or not) by paper hash. */
+export function getAnyPaper(db: Db, hash: string): Promise<PaperWithCourse | null> {
+  return db.papers.findUnique({ where: { paper_hash: hash }, include: { course: true } });
 }
 
-/** The paper for a course/term/year, if one exists (the uniqueness key). */
-export async function findPaper(
-  db: Client,
-  key: { course_code: string; term: Term; year: number },
-): Promise<{ id: string } | null> {
-  const { data, error } = await db
-    .from("papers")
-    .select("id")
-    .eq("course_code", key.course_code)
-    .eq("term", key.term)
-    .eq("year", key.year)
-    .maybeSingle();
-  if (error) throw error;
-  return data;
+/** The paper with this identity (hash of course/term/year), if one exists. */
+export function findPaper(db: Db, key: PaperKey): Promise<PaperRef | null> {
+  return db.papers.findUnique({ where: { paper_hash: paperHash(key) }, select: REF });
+}
+
+/** The paper stored with exactly this PDF (same SHA-256 of the bytes), if any. */
+export function findPaperByFile(db: Db, fileHash: string): Promise<PaperRef | null> {
+  return db.papers.findUnique({ where: { file_hash: fileHash }, select: REF });
 }
 
 /** Storage key for a new upload. The suffix keeps replaced files from being served stale. */
-export function newStoragePath(
-  key: { course_code: string; term: Term; year: number },
-  suffix = Date.now().toString(36),
-): string {
+export function newStoragePath(key: PaperKey, suffix = Date.now().toString(36)): string {
   return `${key.course_code}/${key.year}-${key.term}-${suffix}.pdf`;
 }
 
-export async function uploadPdf(db: Client, path: string, file: Blob): Promise<void> {
-  const { error } = await db.storage
-    .from(PAPERS_BUCKET)
-    .upload(path, file, { contentType: "application/pdf", upsert: false });
-  if (error) throw error;
-}
-
-/** Best-effort: an orphaned file is harmless, a failed request shouldn't mask the real result. */
-export async function removePdf(db: Client, path: string): Promise<void> {
-  await db.storage.from(PAPERS_BUCKET).remove([path]);
-}
-
+/** Inserts a paper; the database derives its paper_hash. Returns that hash. */
 export async function insertPaper(
-  db: Client,
-  input: PaperInput & { storage_path: string; published?: boolean },
-): Promise<{ id: string }> {
-  const { data, error } = await db.from("papers").insert(input).select("id").single();
-  if (error) throw error;
-  return data;
+  db: Db,
+  input: PaperInput & { storage_path: string; file_hash: string; published?: boolean },
+): Promise<string> {
+  const row = await db.papers.create({ data: input, select: { paper_hash: true } });
+  return row.paper_hash;
 }
 
+/**
+ * Updates a paper and returns its (possibly new) paper_hash: changing course/term/year
+ * changes the identity. updateMany + count because RLS hides rows instead of raising.
+ */
 export async function updatePaper(
-  db: Client,
-  id: string,
-  patch: Partial<PaperInput> & { storage_path?: string; published?: boolean },
-): Promise<void> {
-  const { data, error } = await db.from("papers").update(patch).eq("id", id).select("id");
-  if (error) throw error;
-  if (!data.length) throw new Error("Paper not found or not allowed");
+  db: Db,
+  hash: string,
+  patch: Partial<PaperInput> & { storage_path?: string; file_hash?: string; published?: boolean },
+): Promise<string> {
+  const { count } = await db.papers.updateMany({ where: { paper_hash: hash }, data: patch });
+  if (count === 0) throw new Error("Paper not found or not allowed");
+  return patch.course_code && patch.term && patch.year
+    ? paperHash({ course_code: patch.course_code, term: patch.term, year: patch.year })
+    : hash;
 }
 
-export async function deletePaper(db: Client, id: string): Promise<{ storage_path: string }> {
-  const { data, error } = await db
-    .from("papers")
-    .delete()
-    .eq("id", id)
-    .select("storage_path")
-    .single();
-  if (error) throw error;
-  return data;
+/**
+ * Deletes papers by hash, all or nothing: if any is missing or RLS refuses one, it throws and
+ * the surrounding transaction (withCaller) rolls back. Returns the PDFs' storage paths so
+ * the caller can remove the files once the rows are gone.
+ */
+export async function deletePapers(db: Db, hashes: string[]): Promise<string[]> {
+  const unique = [...new Set(hashes)];
+  const rows = await db.papers.findMany({
+    where: { paper_hash: { in: unique } },
+    select: { storage_path: true },
+  });
+  const { count } = await db.papers.deleteMany({ where: { paper_hash: { in: unique } } });
+  if (rows.length !== unique.length || count !== unique.length) {
+    throw new Error("Paper not found or not allowed");
+  }
+  return rows.map((r) => r.storage_path);
 }
 
-export async function courseUsage(db: Client): Promise<Map<string, number>> {
-  const { data, error } = await db.from("papers").select("course_code");
-  if (error) throw error;
-  const counts = new Map<string, number>();
-  for (const { course_code } of data) counts.set(course_code, (counts.get(course_code) ?? 0) + 1);
-  return counts;
+export async function courseUsage(db: Db): Promise<Map<string, number>> {
+  const rows = await db.papers.groupBy({ by: ["course_code"], _count: { _all: true } });
+  return new Map(rows.map((r) => [r.course_code, r._count._all]));
 }
 
-export async function upsertCourse(db: Client, course: Course, isNew: boolean): Promise<void> {
-  const { error } = isNew
-    ? await db.from("courses").insert(course)
-    : await db.from("courses").update(course).eq("code", course.code);
-  if (error) throw error;
+export async function upsertCourse(db: Db, course: Course, isNew: boolean): Promise<void> {
+  if (isNew) {
+    await db.courses.create({ data: course });
+    return;
+  }
+  const { count } = await db.courses.updateMany({ where: { code: course.code }, data: course });
+  if (count === 0) throw new Error("Course not found or not allowed");
 }
 
-export async function deleteCourse(db: Client, code: string): Promise<void> {
-  const { error } = await db.from("courses").delete().eq("code", code);
-  if (error) throw error;
-}
-
-/** Postgres error codes surfaced by PostgREST that the UI turns into friendly messages. */
-export const PG = { uniqueViolation: "23505", foreignKeyViolation: "23503" } as const;
-
-export function pgCode(e: unknown): string | undefined {
-  return typeof e === "object" && e && "code" in e ? String(e.code) : undefined;
+export async function deleteCourse(db: Db, code: string): Promise<void> {
+  const { count } = await db.courses.deleteMany({ where: { code } });
+  if (count === 0) throw new Error("Course not found or not allowed");
 }

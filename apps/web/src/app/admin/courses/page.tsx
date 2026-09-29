@@ -6,8 +6,8 @@ import { CourseForm, DeleteCourse } from "./course-form";
 export const metadata: Metadata = { title: "Courses" };
 
 export default async function CoursesPage() {
-  const { db } = await requireAdmin("/admin/courses");
-  const [courses, usage] = await Promise.all([listCourses(db), courseUsage(db)]);
+  const { query } = await requireAdmin("/admin/courses");
+  const [courses, usage] = await query((db) => Promise.all([listCourses(db), courseUsage(db)]));
 
   return (
     <div className="space-y-6">

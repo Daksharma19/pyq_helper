@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { isAdmin } from "@pyq/db";
-import { userDb } from "@/lib/auth";
+import { queryAs, supabaseForUser } from "@/lib/auth";
 
 const schema = z.object({
   email: z.email(),
@@ -22,17 +22,17 @@ export async function signIn(_: LoginState, form: FormData): Promise<LoginState>
   const email = String(form.get("email") ?? "");
   if (!parsed.success) return { error: "Enter your email and password.", email };
 
-  const db = await userDb();
-  const { error } = await db.auth.signInWithPassword(parsed.data);
+  const supabase = await supabaseForUser();
+  const { data, error } = await supabase.auth.signInWithPassword(parsed.data);
   if (error) return { error: "Wrong email or password.", email };
-  if (!(await isAdmin(db))) {
-    await db.auth.signOut();
+  if (!(await queryAs(data.user.id)(isAdmin))) {
+    await supabase.auth.signOut();
     return { error: "This account is not an admin.", email };
   }
   redirect(parsed.data.next);
 }
 
 export async function signOut() {
-  await (await userDb()).auth.signOut();
+  await (await supabaseForUser()).auth.signOut();
   redirect("/");
 }

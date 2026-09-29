@@ -3,11 +3,13 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createServerClient } from "@supabase/ssr";
-import { isAdmin, type Client } from "@pyq/db";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { isAdmin, withCaller, type Caller, type Db } from "@pyq/db";
 import { env } from "@/env";
+import { prisma } from "@/lib/db";
 
-/** Supabase client acting as the signed-in user (session in cookies). RLS applies. */
-export async function userDb(): Promise<Client> {
+/** Supabase client for the signed-in user (session in cookies): Auth and Storage. */
+export async function supabaseForUser(): Promise<SupabaseClient> {
   const store = await cookies();
   return createServerClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
     cookies: {
@@ -23,14 +25,23 @@ export async function userDb(): Promise<Client> {
   });
 }
 
+/** Runs queries as this (verified) user, so RLS sees their auth.uid(). */
+export function queryAs(userId: string) {
+  const caller: Caller = { role: "authenticated", userId };
+  return <T>(fn: (db: Db) => Promise<T>) => withCaller(prisma(), caller, fn);
+}
+
 /** Current admin session, or null. Cached per request. */
 export const getAdmin = cache(async () => {
-  const db = await userDb();
+  const storage = await supabaseForUser();
+  // getUser() verifies the session with Supabase Auth; the id is safe to put in claims.
   const {
     data: { user },
-  } = await db.auth.getUser();
-  if (!user || !(await isAdmin(db))) return null;
-  return { db, user };
+  } = await storage.auth.getUser();
+  if (!user) return null;
+  const query = queryAs(user.id);
+  if (!(await query(isAdmin))) return null;
+  return { user, query, storage };
 });
 
 /**

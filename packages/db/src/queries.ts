@@ -1,61 +1,55 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BrowseFilters, Course, PaperWithCourse } from "@pyq/shared";
-import type { Database } from "./database.types";
+import type { Db } from "./client";
 
-export type Client = SupabaseClient<Database>;
+// Public queries. They run as whichever caller `withCaller` set, so RLS decides visibility;
+// the explicit `published: true` also keeps unpublished papers off public pages for admins.
 
-export const PAPER_SELECT = "*, course:courses!inner(*)" as const;
 export const PAGE_SIZE = 30;
+export const PAPERS_BUCKET = "papers";
 
-export async function listCourses(db: Client): Promise<Course[]> {
-  const { data, error } = await db.from("courses").select("*").order("semester").order("code");
-  if (error) throw error;
-  return data;
+const withCourse = { course: true } as const;
+
+export function listCourses(db: Db): Promise<Course[]> {
+  return db.courses.findMany({ orderBy: [{ semester: "asc" }, { code: "asc" }] });
 }
 
-export async function listPapers(
-  db: Client,
+export function listPapers(
+  db: Db,
   filters: BrowseFilters,
   limit = PAGE_SIZE,
 ): Promise<PaperWithCourse[]> {
-  let q = db.from("papers").select(PAPER_SELECT).eq("published", true);
-  if (filters.course) q = q.eq("course_code", filters.course);
-  if (filters.term) q = q.eq("term", filters.term);
-  if (filters.year) q = q.eq("year", filters.year);
-  if (filters.semester) q = q.eq("course.semester", filters.semester);
-  const { data, error } = await q
-    .order("year", { ascending: false })
-    .order("course_code")
-    .order("term")
-    .limit(limit);
-  if (error) throw error;
-  return data;
+  return db.papers.findMany({
+    where: {
+      published: true,
+      course_code: filters.course,
+      term: filters.term,
+      year: filters.year,
+      course: filters.semester ? { semester: filters.semester } : undefined,
+    },
+    include: withCourse,
+    orderBy: [{ year: "desc" }, { course_code: "asc" }, { term: "asc" }],
+    take: limit,
+  });
 }
 
-export async function listYears(db: Client): Promise<number[]> {
-  const { data, error } = await db
-    .from("papers")
-    .select("year")
-    .eq("published", true)
-    .order("year", { ascending: false });
-  if (error) throw error;
-  return [...new Set(data.map((r) => r.year))];
+export async function listYears(db: Db): Promise<number[]> {
+  const rows = await db.papers.findMany({
+    where: { published: true },
+    select: { year: true },
+    distinct: ["year"],
+    orderBy: { year: "desc" },
+  });
+  return rows.map((r) => r.year);
 }
 
-/** Public lookup: unpublished papers are treated as missing, even for admins. */
-export async function getPaper(db: Client, id: string): Promise<PaperWithCourse | null> {
-  const { data, error } = await db
-    .from("papers")
-    .select(PAPER_SELECT)
-    .eq("id", id)
-    .eq("published", true)
-    .maybeSingle();
-  if (error) throw error;
-  return data;
+/** Public lookup by paper hash. Unpublished papers are treated as missing, even for admins. */
+export function getPaper(db: Db, hash: string): Promise<PaperWithCourse | null> {
+  return db.papers.findFirst({
+    where: { paper_hash: hash, published: true },
+    include: withCourse,
+  });
 }
 
 export function paperFileName(p: Pick<PaperWithCourse, "course_code" | "term" | "year">): string {
   return `${p.course_code}_${p.year}_${p.term}.pdf`;
 }
-
-export const PAPERS_BUCKET = "papers";

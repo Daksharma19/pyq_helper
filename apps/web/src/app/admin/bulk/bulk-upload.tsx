@@ -10,8 +10,8 @@ import { btnPrimary } from "@/components/admin/styles";
 type Status =
   | { kind: "pending" }
   | { kind: "uploading" }
-  | { kind: "done"; id: string }
-  | { kind: "exists"; id?: string }
+  | { kind: "done"; hash: string }
+  | { kind: "exists"; hash?: string }
   | { kind: "failed"; message: string };
 
 const fileInputCls =
@@ -48,8 +48,8 @@ export function BulkUpload() {
       let next: Status;
       try {
         const res = await createPaper(null, form);
-        if (res.ok && res.createdId) next = { kind: "done", id: res.createdId };
-        else if (res.existingId) next = { kind: "exists", id: res.existingId };
+        if (res.ok && res.created) next = { kind: "done", hash: res.created };
+        else if (res.existing) next = { kind: "exists", hash: res.existing };
         else next = { kind: "failed", message: Object.values(res.errors ?? {}).join("; ") };
       } catch {
         next = { kind: "failed", message: "Request failed" };
@@ -164,16 +164,16 @@ function RowStatus({ row, status }: { row: BulkRow; status?: Status }) {
     case "done":
       return (
         <Link
-          href={`/admin/papers/${status.id}`}
+          href={`/admin/papers/${status.hash}`}
           className="text-green-700 underline dark:text-green-400"
         >
           Uploaded
         </Link>
       );
     case "exists":
-      return status.id ? (
+      return status.hash ? (
         <Link
-          href={`/admin/papers/${status.id}`}
+          href={`/admin/papers/${status.hash}`}
           className="text-amber-700 underline dark:text-amber-400"
         >
           Already exists

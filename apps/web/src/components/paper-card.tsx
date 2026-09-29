@@ -5,7 +5,7 @@ export function PaperCard({ paper }: { paper: PaperWithCourse }) {
   return (
     <li>
       <Link
-        href={`/papers/${paper.id}`}
+        href={`/papers/${paper.paper_hash}`}
         className="block rounded-lg border border-slate-200 p-4 hover:border-brand-600 active:bg-slate-50 dark:border-slate-800 dark:active:bg-slate-900"
       >
         <div className="flex items-start justify-between gap-3">

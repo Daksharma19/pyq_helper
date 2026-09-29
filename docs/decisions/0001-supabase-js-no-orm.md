@@ -1,5 +1,8 @@
 # 0001: supabase-js with generated types, no ORM
 
+> **Superseded by [0004](0004-prisma-with-rls.md)** (Prisma for queries, RLS kept via
+> per-transaction roles). supabase-js is still used for Auth and Storage.
+
 **Context.** Phase 1 needs only public, read-only queries. Access control lives in Postgres RLS.
 
 **Decision.** Query through `@supabase/supabase-js` with the anon key and the generated `Database` types. The queries live in `packages/db/src/queries.ts`. The schema is managed as plain SQL migrations under `packages/db/supabase/migrations`.

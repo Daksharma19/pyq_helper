@@ -1,28 +1,30 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { z } from "zod";
 import { getPaper, paperFileName } from "@pyq/db";
-import { db, paperUrl } from "@/lib/supabase";
+import { PAPER_HASH_RE } from "@pyq/shared";
+import { publicQuery } from "@/lib/db";
+import { paperUrl } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
-type Props = { params: Promise<{ id: string }> };
+// A paper's URL is /papers/<paper_hash>, the SHA-256 of "COURSE|TERM|YEAR".
+type Props = { params: Promise<{ hash: string }> };
 
-async function load(id: string) {
-  if (!z.uuid().safeParse(id).success) return null;
-  return getPaper(db(), id);
+async function load(hash: string) {
+  if (!PAPER_HASH_RE.test(hash)) return null;
+  return publicQuery((db) => getPaper(db, hash));
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const paper = await load((await params).id);
+  const paper = await load((await params).hash);
   if (!paper) return { title: "Paper not found" };
   const title = `${paper.course.title} (${paper.course_code}) ${paper.term} ${paper.year}`;
-  return { title, openGraph: { title } };
+  return { title, openGraph: { title }, alternates: { canonical: `/papers/${paper.paper_hash}` } };
 }
 
 export default async function PaperPage({ params }: Props) {
-  const paper = await load((await params).id);
+  const paper = await load((await params).hash);
   if (!paper) notFound();
 
   const fileName = paperFileName(paper);

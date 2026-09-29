@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@napi-rs/canvas": "^1.0.9",
     "@pyq/db": "workspace:*",
     "@pyq/shared": "workspace:*",
     "@supabase/ssr": "^0.12.7",
@@ -20,6 +21,8 @@
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "server-only": "^0.0.1",
+    "tesseract.js": "^7.0.0",
+    "unpdf": "^1.8.1",
     "zod": "^4.1.11"
   },
   "devDependencies": {

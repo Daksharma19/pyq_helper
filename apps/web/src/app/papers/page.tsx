@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { listCourses, listPapers, listYears, PAGE_SIZE } from "@pyq/db";
 import { parseBrowseFilters } from "@pyq/shared";
-import { db } from "@/lib/supabase";
+import { publicQuery } from "@/lib/db";
 import { FiltersForm } from "@/components/filters-form";
 import { PaperCard } from "@/components/paper-card";
 
@@ -12,12 +12,9 @@ type Props = { searchParams: Promise<Record<string, string | string[] | undefine
 
 export default async function BrowsePage({ searchParams }: Props) {
   const filters = parseBrowseFilters(await searchParams);
-  const client = db();
-  const [courses, years, papers] = await Promise.all([
-    listCourses(client),
-    listYears(client),
-    listPapers(client, filters),
-  ]);
+  const [courses, years, papers] = await publicQuery((db) =>
+    Promise.all([listCourses(db), listYears(db), listPapers(db, filters)]),
+  );
   const hasFilters = Object.values(filters).some((v) => v !== undefined);
   const count = papers.length === PAGE_SIZE ? `${PAGE_SIZE}+` : papers.length;
 

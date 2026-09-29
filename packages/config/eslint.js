@@ -4,7 +4,14 @@ import globals from "globals";
 
 export default tseslint.config(
   {
-    ignores: ["**/.next/**", "**/dist/**", "**/node_modules/**", "**/*.types.ts", "next-env.d.ts"],
+    ignores: [
+      "**/.next/**",
+      "**/dist/**",
+      "**/node_modules/**",
+      "**/*.types.ts",
+      "**/generated/**",
+      "next-env.d.ts",
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

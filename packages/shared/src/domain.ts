@@ -8,6 +8,9 @@ export const COURSE_CODE_RE = /^\d{2}[A-Z]\d{2}[A-Z]{2}\d{3}$/;
 
 export const MIN_YEAR = 2000;
 
+/** A paper's URL id (paper_hash): lowercase hex SHA-256. */
+export const PAPER_HASH_RE = /^[0-9a-f]{64}$/;
+
 export type Course = {
   code: string;
   title: string;
@@ -23,9 +26,13 @@ export type Paper = {
   total_marks: number;
   num_questions: number;
   storage_path: string;
+  /** SHA-256 of "COURSE|TERM|YEAR": the paper's identity and URL id (/papers/<paper_hash>). */
+  paper_hash: string;
+  /** SHA-256 of the PDF bytes: blocks storing the same file twice. */
+  file_hash: string;
   published: boolean;
-  created_at: string;
-  updated_at: string;
+  created_at: Date;
+  updated_at: Date;
 };
 
 export type PaperWithCourse = Paper & { course: Course };

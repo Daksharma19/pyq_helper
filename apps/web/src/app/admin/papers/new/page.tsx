@@ -1,22 +1,27 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { listCourses } from "@pyq/db";
 import { requireAdmin } from "@/lib/auth";
-import { createPaper } from "@/app/admin/actions";
-import { PaperForm } from "@/components/admin/paper-form";
+import { UploadQueue } from "./upload-queue";
 
-export const metadata: Metadata = { title: "Upload paper" };
+export const metadata: Metadata = { title: "Upload papers" };
 
 export default async function NewPaperPage() {
-  const { db } = await requireAdmin("/admin/papers/new");
-  const courses = await listCourses(db);
+  const { query } = await requireAdmin("/admin/papers/new");
+  const courses = await query(listCourses);
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Upload a paper</h1>
+      <h1 className="text-2xl font-bold">Upload papers</h1>
       <p className="text-sm text-slate-500">
-        Papers go live as soon as they are uploaded. Course, term and year stay filled in for the
-        next one.
+        Each PDF is hashed, read and checked for duplicates before anything is stored. Fields
+        outlined green were read from the PDF, amber ones need filling in. Saved papers go live
+        straight away. For a backlog with a metadata sheet, use{" "}
+        <Link href="/admin/bulk" className="underline">
+          bulk upload
+        </Link>
+        .
       </p>
-      <PaperForm courses={courses} action={createPaper} mode="create" />
+      <UploadQueue courses={courses} />
     </div>
   );
 }
