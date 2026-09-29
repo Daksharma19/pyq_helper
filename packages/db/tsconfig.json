@@ -1,1 +1,5 @@
-{ "extends": "@pyq/config/tsconfig/base.json", "compilerOptions": { "lib": ["ES2022", "DOM"] }, "include": ["src"] }
+{
+  "extends": "@pyq/config/tsconfig/base.json",
+  "compilerOptions": { "lib": ["ES2022", "DOM"] },
+  "include": ["src"]
+}

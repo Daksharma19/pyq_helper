@@ -9,7 +9,9 @@ import { createClient } from "@supabase/supabase-js";
 const pkg = join(dirname(fileURLToPath(import.meta.url)), "..");
 const { SUPABASE_DB_URL, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = process.env;
 if (!SUPABASE_DB_URL || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.error("Set SUPABASE_DB_URL, SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in packages/db/.env");
+  console.error(
+    "Set SUPABASE_DB_URL, SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in packages/db/.env",
+  );
   process.exit(1);
 }
 

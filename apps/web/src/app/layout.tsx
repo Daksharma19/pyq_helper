@@ -26,7 +26,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </header>
         <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-6">{children}</main>
         <footer className="border-t border-slate-200 px-4 py-4 text-center text-xs text-slate-500 dark:border-slate-800">
-          For JIIT Noida students. Free to use.
+          For JIIT Noida students. Free to use. ·{" "}
+          <Link href="/admin" className="hover:underline">
+            Admin
+          </Link>
         </footer>
       </body>
     </html>

@@ -4,7 +4,7 @@ import type { Database } from "./database.types";
 
 export type Client = SupabaseClient<Database>;
 
-const PAPER_SELECT = "*, course:courses!inner(*)" as const;
+export const PAPER_SELECT = "*, course:courses!inner(*)" as const;
 export const PAGE_SIZE = 30;
 
 export async function listCourses(db: Client): Promise<Course[]> {
@@ -18,7 +18,7 @@ export async function listPapers(
   filters: BrowseFilters,
   limit = PAGE_SIZE,
 ): Promise<PaperWithCourse[]> {
-  let q = db.from("papers").select(PAPER_SELECT);
+  let q = db.from("papers").select(PAPER_SELECT).eq("published", true);
   if (filters.course) q = q.eq("course_code", filters.course);
   if (filters.term) q = q.eq("term", filters.term);
   if (filters.year) q = q.eq("year", filters.year);
@@ -33,13 +33,23 @@ export async function listPapers(
 }
 
 export async function listYears(db: Client): Promise<number[]> {
-  const { data, error } = await db.from("papers").select("year").order("year", { ascending: false });
+  const { data, error } = await db
+    .from("papers")
+    .select("year")
+    .eq("published", true)
+    .order("year", { ascending: false });
   if (error) throw error;
   return [...new Set(data.map((r) => r.year))];
 }
 
+/** Public lookup: unpublished papers are treated as missing, even for admins. */
 export async function getPaper(db: Client, id: string): Promise<PaperWithCourse | null> {
-  const { data, error } = await db.from("papers").select(PAPER_SELECT).eq("id", id).maybeSingle();
+  const { data, error } = await db
+    .from("papers")
+    .select(PAPER_SELECT)
+    .eq("id", id)
+    .eq("published", true)
+    .maybeSingle();
   if (error) throw error;
   return data;
 }

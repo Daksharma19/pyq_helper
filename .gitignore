@@ -10,3 +10,6 @@ coverage
 packages/db/supabase/.temp
 packages/db/supabase/.branches
 next-env.d.ts
+
+# Real scanned papers for local loading only (contain student names/enrollment numbers)
+/papers/

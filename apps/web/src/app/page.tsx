@@ -50,7 +50,10 @@ export default async function Home() {
       <section>
         <div className="mb-3 flex items-baseline justify-between">
           <h2 className="text-lg font-semibold">Recent papers</h2>
-          <Link href="/papers" className="text-sm text-brand-600 hover:underline dark:text-blue-400">
+          <Link
+            href="/papers"
+            className="text-sm text-brand-600 hover:underline dark:text-blue-400"
+          >
             View all
           </Link>
         </div>

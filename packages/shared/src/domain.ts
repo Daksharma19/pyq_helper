@@ -23,7 +23,9 @@ export type Paper = {
   total_marks: number;
   num_questions: number;
   storage_path: string;
+  published: boolean;
   created_at: string;
+  updated_at: string;
 };
 
 export type PaperWithCourse = Paper & { course: Course };

@@ -10,6 +10,7 @@ export function db(): Client {
 }
 
 export function paperUrl(storagePath: string, download?: string): string {
-  return db().storage.from(PAPERS_BUCKET).getPublicUrl(storagePath, download ? { download } : undefined)
-    .data.publicUrl;
+  return db()
+    .storage.from(PAPERS_BUCKET)
+    .getPublicUrl(storagePath, download ? { download } : undefined).data.publicUrl;
 }

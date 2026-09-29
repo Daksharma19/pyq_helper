@@ -5,6 +5,7 @@
 **Decision.** Query through `@supabase/supabase-js` with the anon key and the generated `Database` types. The queries live in `packages/db/src/queries.ts`. The schema is managed as plain SQL migrations under `packages/db/supabase/migrations`.
 
 **Why.**
+
 - Every web request runs as `anon` or `authenticated`, so RLS is the real enforcement layer.
 - An ORM connecting as the table owner would bypass RLS.
 - SQL migrations keep constraints (such as the unique course+term+year key) explicit.

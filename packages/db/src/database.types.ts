@@ -5,7 +5,20 @@ export type Database = {
   
   "public": {
           Tables: {
-            "courses": {
+            "admins": {
+                  Row: {
+                    "created_at": string,"user_id": string
+                  }
+                  Insert: {
+                    "created_at"?: string,"user_id": string
+                  }
+                  Update: {
+                    "created_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"courses": {
                   Row: {
                     "code": string,"program": string,"semester": number,"title": string
                   }
@@ -20,13 +33,13 @@ export type Database = {
                   ]
                 },"papers": {
                   Row: {
-                    "course_code": string,"created_at": string,"id": string,"num_questions": number,"storage_path": string,"term": Database["public"]['Enums']["exam_term"],"total_marks": number,"year": number
+                    "course_code": string,"created_at": string,"id": string,"num_questions": number,"published": boolean,"storage_path": string,"term": Database["public"]['Enums']["exam_term"],"total_marks": number,"updated_at": string,"year": number
                   }
                   Insert: {
-                    "course_code": string,"created_at"?: string,"id"?: string,"num_questions": number,"storage_path": string,"term": Database["public"]['Enums']["exam_term"],"total_marks": number,"year": number
+                    "course_code": string,"created_at"?: string,"id"?: string,"num_questions": number,"published"?: boolean,"storage_path": string,"term": Database["public"]['Enums']["exam_term"],"total_marks": number,"updated_at"?: string,"year": number
                   }
                   Update: {
-                    "course_code"?: string,"created_at"?: string,"id"?: string,"num_questions"?: number,"storage_path"?: string,"term"?: Database["public"]['Enums']["exam_term"],"total_marks"?: number,"year"?: number
+                    "course_code"?: string,"created_at"?: string,"id"?: string,"num_questions"?: number,"published"?: boolean,"storage_path"?: string,"term"?: Database["public"]['Enums']["exam_term"],"total_marks"?: number,"updated_at"?: string,"year"?: number
                   }
                   Relationships: [
                     {
@@ -43,7 +56,9 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            [_ in never]: never
+            "is_admin":
+{ Args: Record<PropertyKey, never>; Returns: boolean
+                           }
           }
           Enums: {
             "exam_term": "T1"|"T2"|"T3"

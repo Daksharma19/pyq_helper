@@ -1,11 +1,11 @@
 # PYQ Helper
 
-Past-year exam papers for JIIT Noida students. Browse, filter and download, no login.
+Past-year exam papers for JIIT Noida students. Browse, filter and download, no login. Admins manage papers and courses at `/admin`.
 
 ## Layout
 
 ```
-apps/web          Next.js (App Router) + Tailwind: public site
+apps/web          Next.js (App Router) + Tailwind: public site + admin area (/admin)
 packages/db       Supabase migrations, seed data, typed queries
 packages/shared   zod schemas + domain types (browse filters, terms, course codes)
 packages/config   shared tsconfig, eslint, prettier
@@ -39,12 +39,29 @@ pnpm --filter @pyq/db db:reset   # re-apply migrations + seed (incl. sample PDFs
 pnpm --filter @pyq/db db:types   # regenerate src/database.types.ts
 ```
 
+## Admin
+
+- Local: `db:reset` seeds an admin, `admin@pyq.test`. The password is in `packages/db/supabase/seed.sql` (local only).
+- Hosted: create the user in Supabase Auth, then run in the SQL editor:
+
+  ```sql
+  insert into public.admins (user_id) select id from auth.users where email = 'you@example.com';
+  ```
+
+- `/admin`: list, edit, unpublish, delete papers. `/admin/papers/new`: single upload.
+  `/admin/courses`: manage the course list.
+- `/admin/bulk`: pick PDFs (or a folder) plus a CSV with the columns
+  `file,course_code,term,year,total_marks,num_questions`. Rows are validated before upload.
+  Existing papers are skipped and linked.
+
+Writes are enforced by RLS (`is_admin()`), see `docs/decisions/0002`.
+
 ## Commands (from the root)
 
-| Command          | What                                  |
-| ---------------- | ------------------------------------- |
-| `pnpm dev`       | run the web app on :3000              |
-| `pnpm check`     | lint + typecheck + test + build       |
-| `pnpm lint` etc. | individual turbo tasks                |
+| Command          | What                            |
+| ---------------- | ------------------------------- |
+| `pnpm dev`       | run the web app on :3000        |
+| `pnpm check`     | lint + typecheck + test + build |
+| `pnpm lint` etc. | individual turbo tasks          |
 
 CI (`.github/workflows/ci.yml`) runs the same checks on every push/PR.
