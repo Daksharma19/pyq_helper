@@ -48,7 +48,7 @@ export function CourseForm({ course }: { course?: Course }) {
           <span className="mb-1 block font-medium">Semester</span>
           <select name="semester" required defaultValue={v?.semester ?? ""} className={inputCls}>
             <option value="" disabled>
-              —
+              Select
             </option>
             {SEMESTERS.map((s) => (
               <option key={s}>{s}</option>

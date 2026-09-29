@@ -3,7 +3,7 @@ import Link from "next/link";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: { default: "PYQ Helper — JIIT past year papers", template: "%s · PYQ Helper" },
+  title: { default: "PYQ Helper · JIIT past year papers", template: "%s · PYQ Helper" },
   description:
     "Browse and download past year question papers (T1, T2, T3) for JIIT Noida courses. Free, no login.",
 };

@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getPaper, paperFileName } from "@pyq/db";
+import { paperFileName } from "@pyq/db";
 import { PAPER_HASH_RE } from "@pyq/shared";
-import { publicQuery } from "@/lib/db";
+import { getPublicPaper } from "@/lib/public-data";
 import { paperUrl } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,7 @@ type Props = { params: Promise<{ hash: string }> };
 
 async function load(hash: string) {
   if (!PAPER_HASH_RE.test(hash)) return null;
-  return publicQuery((db) => getPaper(db, hash));
+  return getPublicPaper(hash);
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {

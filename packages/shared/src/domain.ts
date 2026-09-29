@@ -36,3 +36,9 @@ export type Paper = {
 };
 
 export type PaperWithCourse = Paper & { course: Course };
+
+/** What the public site needs about a paper: no internal ids, hashes of files, or timestamps. */
+export type PublicPaper = Pick<
+  Paper,
+  "paper_hash" | "course_code" | "term" | "year" | "total_marks" | "num_questions" | "storage_path"
+> & { course: Course };

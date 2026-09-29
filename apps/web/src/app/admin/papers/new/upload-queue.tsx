@@ -276,7 +276,7 @@ function QueueItem({
               <option value="">Choose a course</option>
               {courses.map((c) => (
                 <option key={c.code} value={c.code}>
-                  {c.code} — {c.title}
+                  {c.title} ({c.code})
                 </option>
               ))}
             </select>
@@ -285,7 +285,7 @@ function QueueItem({
           <label className="text-sm">
             <span className="mb-1 block font-medium">Term</span>
             <select value={v.term} onChange={set("term")} className={`${inputCls} ${hint("term")}`}>
-              <option value="">—</option>
+              <option value="">Select</option>
               {TERMS.map((t) => (
                 <option key={t}>{t}</option>
               ))}

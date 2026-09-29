@@ -12,6 +12,12 @@ describe("parseBrowseFilters", () => {
     expect(parseBrowseFilters({ semester: "9", course: "nope", term: "T4", year: "" })).toEqual({});
   });
 
+  it("normalises the subject search and drops blank ones", () => {
+    expect(parseBrowseFilters({ q: "  digital   systems " })).toEqual({ q: "digital systems" });
+    expect(parseBrowseFilters({ q: "   " })).toEqual({});
+    expect(parseBrowseFilters({ q: "x".repeat(300) }).q).toHaveLength(100);
+  });
+
   it("takes the first value of repeated params", () => {
     expect(parseBrowseFilters({ term: ["T3", "T1"] })).toEqual({ term: "T3" });
   });

@@ -5,9 +5,13 @@ import { PAPERS_BUCKET } from "./queries";
 // client, so storage RLS (admin-only writes) applies.
 
 export async function uploadPdf(storage: SupabaseClient, path: string, file: Blob): Promise<void> {
-  const { error } = await storage.storage
-    .from(PAPERS_BUCKET)
-    .upload(path, file, { contentType: "application/pdf", upsert: false });
+  const { error } = await storage.storage.from(PAPERS_BUCKET).upload(path, file, {
+    contentType: "application/pdf",
+    // Paths are unique per upload and never overwritten (upsert: false), so browsers and
+    // CDNs may cache a PDF for a year.
+    cacheControl: String(60 * 60 * 24 * 365),
+    upsert: false,
+  });
   if (error) throw error;
 }
 

@@ -39,3 +39,15 @@
 - **Prisma 7.10 (stable)**, not the 8.0 RC that npm's `latest` tag points to. Prisma is used for queries only; SQL migrations remain the schema source of truth, and `schema.prisma` is introspected. RLS is enforced via `withCaller` (role and JWT claims set per transaction). See docs/decisions/0004.
 - **`prisma.config.ts` reads `DATABASE_URL` optionally** so `prisma generate` (postinstall, CI) works without a database.
 - **Deleting papers**: from the list (row button, or checkboxes → Delete selected, up to 200) and from the edit page. It's all or nothing: if any paper is missing or refused, nothing is deleted. Rows are deleted first, then the PDFs (best effort).
+
+### Search, speed, cleanup
+
+- **Subject search (`?q=`)** is matched in code over the course list (`searchCourses` in `@pyq/shared`), not with SQL `LIKE`. Every word must match the name, a stem ("maths"), an acronym ("PRP"; ambiguous ones like "DS" return every match), a numeral ("sdf 1" finds Fundamentals-I) or the course code. Short numbers only match numbers in the title, so "mathematics 1" doesn't also find Mathematics-2. The course list is small; revisit with Postgres full-text search if it grows to thousands.
+- **Public data is cached** (`unstable_cache` in `apps/web/src/lib/public-data.ts`) with tags `papers`/`courses`. Every admin action invalidates them; there's a 1-hour fallback for edits made outside the app. Pages stay dynamic so `next build` needs no database. Measured on a production build: median 30 ms before, 16.5 ms after.
+- **Public queries return `PublicPaper`**: no uuid, file hash or timestamps. It leaks less and is JSON-safe for caching.
+- **`@pyq/shared` is `"sideEffects": false`** so client bundles drop unused modules (zod). `/papers` JS went from 134 kB to 108 kB.
+- **Dev uses Turbopack** (`next dev --turbopack`). First-visit compiles went from about 18 s to 2–8 s. `@prisma/client` and `pg` are direct web dependencies so Turbopack can load them as server externals under pnpm.
+- **PDFs are uploaded with a 1-year `Cache-Control`**. Storage paths are unique per upload and never overwritten.
+- **Local Supabase runs 4 containers** (db, auth, storage, kong). PostgREST, Realtime, Edge Functions, Analytics/Vector, Studio/pg-meta and Mailpit are disabled in `config.toml` because the app doesn't use them. Set `enabled = true` to bring one back (e.g. Studio for browsing the DB, or SMTP for Phase 3 magic links).
+- **Em dashes removed** from code, UI and config. Course labels read "Title (CODE)". En dashes in number ranges ("2000–2100") are kept.
+- **RLS integration test uses its own fixtures** (course `99Z99ZZ999`) and cleans up, so it passes with any data in the DB.

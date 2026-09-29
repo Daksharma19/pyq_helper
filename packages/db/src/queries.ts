@@ -1,32 +1,50 @@
-import type { BrowseFilters, Course, PaperWithCourse } from "@pyq/shared";
+import type { BrowseFilters, Course, PublicPaper } from "@pyq/shared";
 import type { Db } from "./client";
 
 // Public queries. They run as whichever caller `withCaller` set, so RLS decides visibility;
 // the explicit `published: true` also keeps unpublished papers off public pages for admins.
+// They return plain JSON-safe objects (PublicPaper) so results can be cached.
 
 export const PAGE_SIZE = 30;
 export const PAPERS_BUCKET = "papers";
 
-const withCourse = { course: true } as const;
+/** Browse filters with the subject search already resolved to course codes. */
+export type PaperQuery = Omit<BrowseFilters, "q"> & {
+  /** Only these courses (from searchCourses). An empty array matches nothing. */
+  courseIn?: string[];
+};
+
+const PUBLIC_SELECT = {
+  paper_hash: true,
+  course_code: true,
+  term: true,
+  year: true,
+  total_marks: true,
+  num_questions: true,
+  storage_path: true,
+  course: true,
+} as const;
 
 export function listCourses(db: Db): Promise<Course[]> {
   return db.courses.findMany({ orderBy: [{ semester: "asc" }, { code: "asc" }] });
 }
 
-export function listPapers(
+export async function listPapers(
   db: Db,
-  filters: BrowseFilters,
+  filters: PaperQuery,
   limit = PAGE_SIZE,
-): Promise<PaperWithCourse[]> {
+): Promise<PublicPaper[]> {
+  if (filters.courseIn?.length === 0) return [];
   return db.papers.findMany({
     where: {
       published: true,
-      course_code: filters.course,
+      course_code: filters.courseIn ? { in: filters.courseIn } : undefined,
+      AND: filters.course ? [{ course_code: filters.course }] : undefined,
       term: filters.term,
       year: filters.year,
       course: filters.semester ? { semester: filters.semester } : undefined,
     },
-    include: withCourse,
+    select: PUBLIC_SELECT,
     orderBy: [{ year: "desc" }, { course_code: "asc" }, { term: "asc" }],
     take: limit,
   });
@@ -43,13 +61,13 @@ export async function listYears(db: Db): Promise<number[]> {
 }
 
 /** Public lookup by paper hash. Unpublished papers are treated as missing, even for admins. */
-export function getPaper(db: Db, hash: string): Promise<PaperWithCourse | null> {
+export function getPaper(db: Db, hash: string): Promise<PublicPaper | null> {
   return db.papers.findFirst({
     where: { paper_hash: hash, published: true },
-    include: withCourse,
+    select: PUBLIC_SELECT,
   });
 }
 
-export function paperFileName(p: Pick<PaperWithCourse, "course_code" | "term" | "year">): string {
+export function paperFileName(p: Pick<PublicPaper, "course_code" | "term" | "year">): string {
   return `${p.course_code}_${p.year}_${p.term}.pdf`;
 }

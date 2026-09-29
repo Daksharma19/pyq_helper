@@ -9,6 +9,13 @@ const optional = <T extends z.ZodType>(schema: T) =>
   );
 
 export const browseFiltersSchema = z.object({
+  /** Subject search (name, acronym or code); matched by searchCourses(). */
+  q: optional(
+    z
+      .string()
+      .transform((s) => s.replace(/\s+/g, " ").trim().slice(0, 100))
+      .pipe(z.string().min(1)),
+  ),
   semester: optional(z.coerce.number().int().min(1).max(8)),
   course: optional(
     z

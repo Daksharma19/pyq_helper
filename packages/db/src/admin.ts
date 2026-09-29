@@ -22,13 +22,18 @@ export async function isAdmin(db: Db): Promise<boolean> {
 }
 
 /** All papers including unpublished, newest first. */
-export function listAllPapers(
+export async function listAllPapers(
   db: Db,
-  filters: { course?: string; published?: boolean } = {},
+  filters: { course?: string; courseIn?: string[]; published?: boolean } = {},
   limit = 200,
 ): Promise<PaperWithCourse[]> {
+  if (filters.courseIn?.length === 0) return [];
   return db.papers.findMany({
-    where: { course_code: filters.course, published: filters.published },
+    where: {
+      course_code: filters.courseIn ? { in: filters.courseIn } : undefined,
+      AND: filters.course ? [{ course_code: filters.course }] : undefined,
+      published: filters.published,
+    },
     include: { course: true },
     orderBy: { created_at: "desc" },
     take: limit,

@@ -77,7 +77,7 @@ export function PaperForm({ courses, action, initial = {} }: Props) {
             </option>
             {visible.map((c) => (
               <option key={c.code} value={c.code}>
-                {c.code} — {c.title} (Sem {c.semester})
+                {c.title} ({c.code}) · Sem {c.semester}
               </option>
             ))}
           </select>
@@ -90,7 +90,7 @@ export function PaperForm({ courses, action, initial = {} }: Props) {
           <span className="mb-1 block font-medium">Term</span>
           <select name="term" required defaultValue={v.term ?? ""} className={inputCls}>
             <option value="" disabled>
-              —
+              Select
             </option>
             {TERMS.map((t) => (
               <option key={t}>{t}</option>

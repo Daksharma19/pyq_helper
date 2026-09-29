@@ -49,6 +49,7 @@ It skips when `DATABASE_URL` isn't set (CI has no database).
   create role prisma login password '<strong password>';
   grant anon, authenticated to prisma;
   ```
+
 - Each request is one short transaction. Slow work (OCR, uploads) must happen outside `fn`.
 - After a migration: `db:reset`, then `db:pull`. Relation field renames in `schema.prisma`
   (`papers.course`, `admins.user`) survive re-introspection.

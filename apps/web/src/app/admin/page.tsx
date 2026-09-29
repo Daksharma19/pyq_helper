@@ -1,5 +1,5 @@
 import { listAllPapers, listCourses } from "@pyq/db";
-import { parseBrowseFilters } from "@pyq/shared";
+import { parseBrowseFilters, searchCourses } from "@pyq/shared";
 import { requireAdmin } from "@/lib/auth";
 import { Notice } from "@/components/admin/notice";
 import { PapersTable } from "./papers-table";
@@ -12,23 +12,34 @@ const selectCls =
 export default async function AdminPapersPage({ searchParams }: Props) {
   const { query } = await requireAdmin();
   const sp = await searchParams;
-  const { course } = parseBrowseFilters(sp);
+  const { course, q } = parseBrowseFilters(sp);
   const status = sp.status === "draft" || sp.status === "live" ? sp.status : "";
   const published = status ? status === "live" : undefined;
-  const [courses, papers] = await query((db) =>
-    Promise.all([listCourses(db), listAllPapers(db, { course, published })]),
-  );
+  const [courses, papers] = await query(async (db) => {
+    const all = await listCourses(db);
+    const courseIn = q ? searchCourses(all, q) : undefined;
+    return [all, await listAllPapers(db, { course, courseIn, published })] as const;
+  });
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h1 className="text-2xl font-bold">Papers</h1>
-        <form className="flex flex-wrap gap-2 text-sm">
+        <form role="search" className="flex flex-wrap gap-2 text-sm">
+          <input
+            type="search"
+            name="q"
+            defaultValue={q ?? ""}
+            placeholder="Search subject"
+            aria-label="Search subject"
+            maxLength={100}
+            className={`${selectCls} w-44`}
+          />
           <select name="course" defaultValue={course ?? ""} className={selectCls}>
             <option value="">All courses</option>
             {courses.map((c) => (
               <option key={c.code} value={c.code}>
-                {c.code} — {c.title}
+                {c.title} ({c.code})
               </option>
             ))}
           </select>

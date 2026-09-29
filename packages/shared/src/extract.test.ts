@@ -57,7 +57,7 @@ in End Term Examination, 2018 rd ~
 B.Tech II Semester
 Course Title : Probability & Random Processes Maximum Time : 2 Hrs. |
 Course Code : 15B11MA301 Maximum Marks : 35
-ort Consider the probability density function f(x) = ae, —0<x<o0. [3M]
+ort Consider the probability density function f(x) = ae, -0<x<o0. [3M]
 Qi the mean and variance of the binomial distribution are 6 and 1.5 [4M]
 03 itx (t)= A+ Bsin(wt + ¢), where 4, B and gare independent ' [4M]
 Qf Find the average power of the random process [4M]

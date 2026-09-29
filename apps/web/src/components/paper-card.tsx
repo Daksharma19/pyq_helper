@@ -1,7 +1,7 @@
 import Link from "next/link";
-import type { PaperWithCourse } from "@pyq/shared";
+import type { PublicPaper } from "@pyq/shared";
 
-export function PaperCard({ paper }: { paper: PaperWithCourse }) {
+export function PaperCard({ paper }: { paper: PublicPaper }) {
   return (
     <li>
       <Link

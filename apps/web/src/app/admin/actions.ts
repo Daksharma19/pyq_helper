@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import {
   DB_ERROR,
   dbErrorCode,
@@ -31,6 +31,7 @@ import {
 } from "@pyq/shared";
 import { requireAdmin } from "@/lib/auth";
 import { paperText, readPdf, type TextSource } from "@/lib/pipeline";
+import { TAGS } from "@/lib/public-data";
 
 // A paper's identity is paper_hash = SHA-256("COURSE|TERM|YEAR"), computed from the metadata
 // (read from the PDF, confirmed by the admin). It is the duplicate check and the URL id.
@@ -51,6 +52,18 @@ const DUPLICATE = "A paper for this course, term and year already exists.";
 const SAME_FILE = "This exact PDF is already stored";
 const label = (p: PaperKey) => `${p.course_code} ${p.term} ${p.year}`;
 const pdfBlob = (bytes: Uint8Array<ArrayBuffer>) => new Blob([bytes], { type: "application/pdf" });
+
+/** After any paper change: drop cached public data and refresh the admin list. */
+function papersChanged() {
+  revalidateTag(TAGS.papers);
+  revalidatePath("/admin");
+}
+
+/** After any course change (titles also appear on paper pages). */
+function coursesChanged() {
+  revalidateTag(TAGS.courses);
+  revalidatePath("/admin/courses");
+}
 
 function formValues(form: FormData): Record<string, string> {
   const out: Record<string, string> = {};
@@ -156,7 +169,7 @@ export async function createPaper(_: FormState | null, form: FormData): Promise<
     const created = await query((db) =>
       insertPaper(db, { ...input, storage_path: path, file_hash }),
     );
-    revalidatePath("/admin");
+    papersChanged();
     return { ok: true, created, message: `Added ${label(input)}.` };
   } catch (e) {
     await removePdf(storage, path);
@@ -219,7 +232,7 @@ export async function editPaper(hash: string, _: FormState, form: FormData): Pro
     throw e;
   }
   if (replacement) await removePdf(storage, current.storage_path);
-  revalidatePath("/admin");
+  papersChanged();
   if (newHash !== hash) redirect(`/admin/papers/${newHash}?moved=1`);
   revalidatePath(`/admin/papers/${hash}`);
   return { ok: true, message: replacement ? "Saved, PDF replaced." : "Saved.", values };
@@ -230,7 +243,7 @@ export async function setPublished(hash: string, published: boolean): Promise<vo
   const { query } = await requireAdmin(`/admin/papers/${hash}`);
   await query((db) => updatePaper(db, hash, { published }));
   revalidatePath(`/admin/papers/${hash}`);
-  revalidatePath("/admin");
+  papersChanged();
 }
 
 /** Upper bound for one bulk delete: keeps the transaction and storage request small. */
@@ -253,8 +266,7 @@ export async function removePapers(hashes: string[]): Promise<FormState> {
     return { errors: { _: "Nothing was deleted: some papers no longer exist. Reload and retry." } };
   }
   await removePdf(storage, ...paths);
-  revalidatePath("/admin");
-  revalidatePath("/papers");
+  papersChanged();
   const n = paths.length;
   return { ok: true, message: `Deleted ${n} paper${n === 1 ? "" : "s"}.` };
 }
@@ -278,7 +290,7 @@ export async function saveCourse(_: FormState, form: FormData): Promise<FormStat
       return { errors: { code: "That course code already exists." }, values };
     throw e;
   }
-  revalidatePath("/admin/courses");
+  coursesChanged();
   return { ok: true, message: `${isNew ? "Added" : "Saved"} ${parsed.data.code}.` };
 }
 
@@ -291,6 +303,6 @@ export async function removeCourse(code: string): Promise<FormState> {
       return { errors: { _: `${code} has papers. Delete or move them first.` } };
     throw e;
   }
-  revalidatePath("/admin/courses");
+  coursesChanged();
   return { ok: true, message: `Deleted ${code}.` };
 }
