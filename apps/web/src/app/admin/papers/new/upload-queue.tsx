@@ -22,6 +22,7 @@ import type { TextSource } from "@/lib/pipeline";
 import { stageUpload } from "@/lib/stage-upload";
 import { ACCEPT, precheckUpload } from "@/lib/upload-formats";
 import { btnPrimary, btnSecondary, inputCls } from "@/components/admin/styles";
+import { CameraCapture } from "./camera-capture";
 
 type Fields = Record<"course_code" | "term" | "year" | "total_marks" | "num_questions", string>;
 
@@ -212,6 +213,7 @@ export function UploadQueue({ courses: initialCourses }: { courses: Course[] }) 
 
   return (
     <div className="space-y-4">
+      <CameraCapture onPaper={(pdf) => add([pdf])} />
       <div
         role="button"
         tabIndex={0}
