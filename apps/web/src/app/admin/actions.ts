@@ -319,3 +319,21 @@ export async function removeCourse(code: string): Promise<FormState> {
   coursesChanged();
   return { ok: true, message: `Deleted ${code}.` };
 }
+
+/**
+ * Adds a course from the upload queue, when a paper's course isn't in the list yet. A course
+ * that already exists (e.g. added by another paper in the same batch) is fine: it's kept as is.
+ */
+export async function addCourse(values: Record<string, string>): Promise<FormState> {
+  const { query } = await requireAdmin("/admin/papers/new");
+  const parsed = courseInputSchema.safeParse(values);
+  if (!parsed.success) return { errors: firstIssues(parsed.error), values };
+  try {
+    await query((db) => upsertCourse(db, parsed.data, true));
+  } catch (e) {
+    if (dbErrorCode(e) === DB_ERROR.uniqueViolation) return { ok: true };
+    throw e;
+  }
+  coursesChanged();
+  return { ok: true, message: `Added course ${parsed.data.code}.` };
+}

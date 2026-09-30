@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { SEMESTERS } from "@pyq/shared";
 import { getPapers } from "@/lib/public-data";
+import { HomeSearch } from "@/components/home-search";
 import { PaperCard } from "@/components/paper-card";
 
 export const dynamic = "force-dynamic";
@@ -17,20 +18,7 @@ export default async function Home() {
         <p className="text-slate-600 dark:text-slate-400">
           T1, T2 and T3 papers for every course. No login, just find and download.
         </p>
-        <form action="/papers" method="get" role="search" className="flex gap-2">
-          <input
-            type="search"
-            name="q"
-            placeholder="Subject, e.g. Digital Systems, PRP or 18B11EC213"
-            aria-label="Search subject"
-            enterKeyHint="search"
-            maxLength={100}
-            className="min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-3 py-2.5 text-base dark:border-slate-700 dark:bg-slate-900"
-          />
-          <button className="rounded-md bg-brand-600 px-4 py-2.5 font-medium text-white hover:bg-brand-700">
-            Search
-          </button>
-        </form>
+        <HomeSearch />
       </section>
 
       <section>

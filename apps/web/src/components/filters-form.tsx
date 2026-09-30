@@ -8,7 +8,7 @@ type Props = { filters: BrowseFilters; courses: Course[]; years: number[] };
 
 const selectCls =
   "w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-base dark:border-slate-700 dark:bg-slate-900";
-const SEARCH_DELAY_MS = 250;
+const SEARCH_DELAY_MS = 150;
 
 /**
  * GET form: works without JS. With JS, selects apply immediately and the subject search
@@ -32,6 +32,15 @@ export function FiltersForm({ filters, courses, years }: Props) {
     }
   }, [filters.q]);
   useEffect(() => () => clearTimeout(timer.current), []);
+
+  // Arriving from the home page search mid-typing: keep typing here, cursor at the end.
+  const searchInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const el = searchInput.current;
+    if (!el || !new URLSearchParams(window.location.search).has("focus")) return;
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
+  }, []);
 
   const visibleCourses = courses.filter(
     (c) => (!filters.semester || c.semester === filters.semester) && matchesSubject(c, q),
@@ -79,6 +88,7 @@ export function FiltersForm({ filters, courses, years }: Props) {
             />
           </svg>
           <input
+            ref={searchInput}
             type="search"
             name="q"
             value={q}

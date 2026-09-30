@@ -2,19 +2,39 @@
 
 import Link from "next/link";
 import { useRef, useState } from "react";
-import { paperInputSchema, TERMS, type Course, type ExtractedMeta } from "@pyq/shared";
-import { analyzePaper, createPaper, type Analysis } from "@/app/admin/actions";
+import {
+  courseInputSchema,
+  paperInputSchema,
+  semesterOf,
+  SEMESTERS,
+  TERMS,
+  type Course,
+  type ExtractedMeta,
+} from "@pyq/shared";
+import {
+  addCourse,
+  analyzePaper,
+  createPaper,
+  type Analysis,
+  type FormState,
+} from "@/app/admin/actions";
 import type { TextSource } from "@/lib/pipeline";
 import { ACCEPT, precheckUpload } from "@/lib/upload-formats";
 import { btnPrimary, btnSecondary, inputCls } from "@/components/admin/styles";
 
 type Fields = Record<"course_code" | "term" | "year" | "total_marks" | "num_questions", string>;
 
+/** A course typed in by the admin because it isn't in the list yet. */
+type NewCourse = { code: string; title: string; semester: string };
+const NEW = "__new";
+
 type Item = {
   key: string;
   file: File;
   status: "analyzing" | "review" | "saving" | "saved" | "duplicate" | "error";
   values: Fields;
+  /** Set while the admin is adding a course that isn't in the list. */
+  newCourse?: NewCourse;
   /** Fields the pipeline read from the PDF (the rest need typing in). */
   found: Set<keyof Fields>;
   source?: TextSource;
@@ -50,7 +70,8 @@ function toFields(meta: ExtractedMeta): Fields {
  * check, conversion to PDF, validation, text/OCR extraction, identity hash) → admin reviews
  * the pre-filled fields → save. Nothing is stored before "Save".
  */
-export function UploadQueue({ courses }: { courses: Course[] }) {
+export function UploadQueue({ courses: initialCourses }: { courses: Course[] }) {
+  const [courses, setCourses] = useState(initialCourses);
   const [items, setItems] = useState<Item[]>([]);
   const [dragging, setDragging] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -88,8 +109,17 @@ export function UploadQueue({ courses }: { courses: Course[] }) {
         continue;
       }
       const values = toFields(res.meta);
+      // A course code read from the paper but missing from the list: offer to add it.
+      const unknown = values.course_code && !courses.some((c) => c.code === values.course_code);
       patch(it.key, {
         values,
+        newCourse: unknown
+          ? {
+              code: values.course_code,
+              title: res.meta.course_title ?? "",
+              semester: res.meta.semester ? String(res.meta.semester) : "",
+            }
+          : undefined,
         found: new Set(FIELDS.filter((f) => values[f] !== "")),
         source: res.duplicate?.reason === "file" ? undefined : res.source,
         convertedFrom: res.convertedFrom,
@@ -109,8 +139,41 @@ export function UploadQueue({ courses }: { courses: Course[] }) {
 
   async function save(it: Item) {
     patch(it.key, { status: "saving", errors: undefined, message: undefined });
+    let values = it.values;
+    if (it.newCourse) {
+      const nc = it.newCourse;
+      let res: FormState;
+      try {
+        res = await addCourse({ code: nc.code, title: nc.title, semester: nc.semester });
+      } catch {
+        res = { errors: { _: "Could not add the course. Try again." } };
+      }
+      if (!res.ok) {
+        const e = res.errors ?? {};
+        const errors: Record<string, string> = {};
+        if (e.code) errors.new_code = e.code;
+        if (e.title) errors.new_title = e.title;
+        if (e.semester) errors.new_semester = e.semester;
+        patch(it.key, { status: "review", errors, message: e._ });
+        return;
+      }
+      const code = nc.code.trim().toUpperCase();
+      setCourses((list) => [
+        ...list,
+        { code, title: nc.title.trim(), program: "B.Tech", semester: Number(nc.semester) },
+      ]);
+      values = { ...values, course_code: code };
+      // Other cards waiting on the same new course can now just pick it.
+      setItems((list) =>
+        list.map((x) =>
+          x.newCourse?.code.trim().toUpperCase() === code
+            ? { ...x, newCourse: undefined, values: { ...x.values, course_code: code } }
+            : x,
+        ),
+      );
+    }
     const form = new FormData();
-    for (const f of FIELDS) form.set(f, it.values[f]);
+    for (const f of FIELDS) form.set(f, values[f]);
     form.set("file", it.file);
     try {
       const res = await createPaper(null, form);
@@ -128,7 +191,13 @@ export function UploadQueue({ courses }: { courses: Course[] }) {
   }
 
   const schema = paperInputSchema();
-  const ready = items.filter((it) => it.status === "review" && schema.safeParse(it.values).success);
+  const ready = items.filter(
+    (it) =>
+      it.status === "review" &&
+      schema.safeParse(it.newCourse ? { ...it.values, course_code: it.newCourse.code } : it.values)
+        .success &&
+      (!it.newCourse || courseInputSchema.safeParse(it.newCourse).success),
+  );
 
   async function saveAll() {
     for (const it of ready) await save(it);
@@ -189,6 +258,7 @@ export function UploadQueue({ courses }: { courses: Course[] }) {
             item={it}
             courses={courses}
             onChange={(values) => patch(it.key, { values })}
+            onNewCourse={(newCourse) => patch(it.key, { newCourse })}
             onSave={() => save(it)}
             onRemove={() => setItems((l) => l.filter((x) => x.key !== it.key))}
           />
@@ -211,16 +281,18 @@ function QueueItem({
   item,
   courses,
   onChange,
+  onNewCourse,
   onSave,
   onRemove,
 }: {
   item: Item;
   courses: Course[];
   onChange: (v: Fields) => void;
+  onNewCourse: (c: NewCourse | undefined) => void;
   onSave: () => void;
   onRemove: () => void;
 }) {
-  const { values: v, found, errors = {} } = item;
+  const { values: v, found, newCourse: nc, errors = {} } = item;
   const editable = item.status === "review";
   const course = courses.find((c) => c.code === v.course_code);
   const set = (k: keyof Fields) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -284,8 +356,19 @@ function QueueItem({
               )}
             </span>
             <select
-              value={v.course_code}
-              onChange={set("course_code")}
+              value={nc ? NEW : course ? v.course_code : ""}
+              onChange={(e) => {
+                if (e.target.value === NEW)
+                  onNewCourse({
+                    code: v.course_code,
+                    title: "",
+                    semester: String(semesterOf(v.course_code) ?? ""),
+                  });
+                else {
+                  onNewCourse(undefined);
+                  set("course_code")(e);
+                }
+              }}
               className={`${inputCls} ${hint("course_code")}`}
             >
               <option value="">Choose a course</option>
@@ -294,9 +377,52 @@ function QueueItem({
                   {c.title} ({c.code})
                 </option>
               ))}
+              <option value={NEW}>+ Course not listed, add it…</option>
             </select>
             {errors.course_code && <Err>{errors.course_code}</Err>}
           </label>
+          {nc && (
+            <div className="col-span-2 grid grid-cols-2 gap-3 rounded-md bg-slate-50 p-3 sm:col-span-6 sm:grid-cols-6 dark:bg-slate-900">
+              <p className="col-span-2 text-xs text-slate-500 sm:col-span-6">
+                New course. It is added to the course list when you save this paper.
+              </p>
+              <label className="text-sm sm:col-span-2">
+                <span className="mb-1 block font-medium">Course code</span>
+                <input
+                  value={nc.code}
+                  placeholder="e.g. 15B11CI111"
+                  onChange={(e) => onNewCourse({ ...nc, code: e.target.value })}
+                  className={inputCls}
+                />
+                {errors.new_code && <Err>{errors.new_code}</Err>}
+              </label>
+              <label className="text-sm sm:col-span-3">
+                <span className="mb-1 block font-medium">Course title</span>
+                <input
+                  value={nc.title}
+                  onChange={(e) => onNewCourse({ ...nc, title: e.target.value })}
+                  className={inputCls}
+                />
+                {errors.new_title && <Err>{errors.new_title}</Err>}
+              </label>
+              <label className="col-span-2 text-sm sm:col-span-1">
+                <span className="mb-1 block font-medium">Semester</span>
+                <select
+                  value={nc.semester}
+                  onChange={(e) => onNewCourse({ ...nc, semester: e.target.value })}
+                  className={inputCls}
+                >
+                  <option value="">Select</option>
+                  {SEMESTERS.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+                {errors.new_semester && <Err>{errors.new_semester}</Err>}
+              </label>
+            </div>
+          )}
           <label className="text-sm">
             <span className="mb-1 block font-medium">Term</span>
             <select value={v.term} onChange={set("term")} className={`${inputCls} ${hint("term")}`}>

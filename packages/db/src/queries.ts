@@ -29,6 +29,14 @@ export function listCourses(db: Db): Promise<Course[]> {
   return db.courses.findMany({ orderBy: [{ semester: "asc" }, { code: "asc" }] });
 }
 
+/** Courses with at least one published paper: the public site never lists empty subjects. */
+export function listCoursesWithPapers(db: Db): Promise<Course[]> {
+  return db.courses.findMany({
+    where: { papers: { some: { published: true } } },
+    orderBy: [{ semester: "asc" }, { code: "asc" }],
+  });
+}
+
 export async function listPapers(
   db: Db,
   filters: PaperQuery,

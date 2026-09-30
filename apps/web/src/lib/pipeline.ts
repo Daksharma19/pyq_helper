@@ -9,8 +9,8 @@ export type TextSource = "text-layer" | "ocr" | "none";
 
 /** Below this many characters a "text layer" is scanner noise, not the paper's text. */
 const MIN_TEXT = 40;
-/** The header (course, term, year, marks) is on page 1; questions rarely run past page 2. */
-const OCR_PAGES = 2;
+/** OCR costs a few seconds a page; papers are rarely longer than this. */
+const OCR_PAGES = 8;
 
 /**
  * The paper's text: the PDF's own text layer when it has one (born-digital PDFs, or scans
@@ -21,16 +21,22 @@ export async function paperText(bytes: Uint8Array): Promise<{ text: string; sour
   try {
     // pdf.js may detach the buffer it is given, so every call gets a copy.
     const pdf = await getDocumentProxy(bytes.slice());
-    const { text } = await extractText(pdf, { mergePages: false });
-    const layer = text.slice(0, 3).join("\n");
-    if (layer.trim().length >= MIN_TEXT) return { text: layer, source: "text-layer" };
-
+    const { text: layers } = await extractText(pdf, { mergePages: false });
+    // Page by page: a paper can mix born-digital pages with scanned ones, and questions run
+    // over several pages, so every page counts towards the question total.
     const parts: string[] = [];
-    for (let page = 1; page <= Math.min(pdf.numPages, OCR_PAGES); page++) {
-      parts.push(await ocrPage(bytes, page));
+    let ocrUsed = 0;
+    for (let page = 1; page <= pdf.numPages; page++) {
+      const layer = layers[page - 1] ?? "";
+      if (layer.trim().length >= MIN_TEXT) parts.push(layer);
+      else if (ocrUsed < OCR_PAGES) {
+        ocrUsed++;
+        parts.push(await ocrPage(bytes, page));
+      }
     }
-    const ocr = parts.join("\n");
-    return ocr.trim() ? { text: ocr, source: "ocr" } : { text: "", source: "none" };
+    const text = parts.join("\n");
+    if (!text.trim()) return { text: "", source: "none" };
+    return { text, source: ocrUsed ? "ocr" : "text-layer" };
   } catch (e) {
     console.error("paperText failed", e);
     return { text: "", source: "none" };

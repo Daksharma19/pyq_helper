@@ -70,7 +70,7 @@ constants C; and C, (ify joint pdf of X and Y, (i) PI6A5 <X <0.5/Y = 0.625) [4M]
 
 describe("extractPaperMeta", () => {
   it("reads an OCR'd end-term with misread question numbers (QI, QS)", () => {
-    expect(extractPaperMeta(prp2016, [{ code: "15B11MA301", title: "x" }], now)).toEqual({
+    expect(extractPaperMeta(prp2016, [{ code: "15B11MA301", title: "x" }], now)).toMatchObject({
       course_code: "15B11MA301",
       term: "T3",
       year: 2016,
@@ -80,7 +80,7 @@ describe("extractPaperMeta", () => {
   });
 
   it("counts questions by marks tags when OCR loses the numbering", () => {
-    expect(extractPaperMeta(prp2018, [{ code: "15B11MA301", title: "x" }], now)).toEqual({
+    expect(extractPaperMeta(prp2018, [{ code: "15B11MA301", title: "x" }], now)).toMatchObject({
       course_code: "15B11MA301",
       term: "T3",
       year: 2018,
@@ -90,7 +90,7 @@ describe("extractPaperMeta", () => {
   });
 
   it("reads a real maths paper, including the OCR'd '04.' and '06.'", () => {
-    expect(extractPaperMeta(maths, courses, now)).toEqual({
+    expect(extractPaperMeta(maths, courses, now)).toMatchObject({
       course_code: "15B11MA111",
       term: "T2",
       year: 2023,
@@ -100,7 +100,7 @@ describe("extractPaperMeta", () => {
   });
 
   it("reads a real physics paper", () => {
-    expect(extractPaperMeta(physics, courses, now)).toEqual({
+    expect(extractPaperMeta(physics, courses, now)).toMatchObject({
       course_code: "15B11PH111",
       term: "T2",
       year: 2023,
@@ -111,7 +111,7 @@ describe("extractPaperMeta", () => {
 
   it("falls back to the course title and end-sem wording", () => {
     const text = "End Semester Examination Even 2024\nPhysics-1\nMax. Marks 35";
-    expect(extractPaperMeta(text, courses, now)).toEqual({
+    expect(extractPaperMeta(text, courses, now)).toMatchObject({
       course_code: "15B11PH111",
       term: "T3",
       year: 2024,
@@ -121,5 +121,37 @@ describe("extractPaperMeta", () => {
 
   it("returns nothing for a blank (image-only) scan", () => {
     expect(extractPaperMeta("", courses, now)).toEqual({});
+  });
+});
+
+describe("courses not in the list", () => {
+  const header = `Jaypee Institute of Information Technology, Noida
+End Term Examination: EVEN Semester 2023
+4 B.Tech. VI Semester B
+Course Title: Project Management Maximum Time: 2 Hrs.
+CourseCode:16BINHS631 Maximum Marks:35`;
+
+  it("reads letter-bearing codes, fixing OCR's I for 1, plus title and semester", () => {
+    expect(extractPaperMeta(header, [], now)).toMatchObject({
+      course_code: "16B1NHS631",
+      course_title: "Project Management",
+      semester: 6,
+      term: "T3",
+      year: 2023,
+      total_marks: 35,
+    });
+  });
+
+  it("cuts the title at a slash of alternate titles", () => {
+    const text = "Course Title: Probability and Random Processes/\nCourse Code: 15B11MA301";
+    expect(extractPaperMeta(text, [], now)).toMatchObject({
+      course_title: "Probability and Random Processes",
+      semester: 3,
+    });
+  });
+
+  it("counts questions across all pages", () => {
+    const text = "Q1. a\nQ2. b\n\f\nQ3. c\nQ4. d\nQ5. e";
+    expect(extractPaperMeta(text, [], now).num_questions).toBe(5);
   });
 });

@@ -1,6 +1,6 @@
 import "server-only";
 import { unstable_cache } from "next/cache";
-import { getPaper, listCourses, listPapers, listYears, type PaperQuery } from "@pyq/db";
+import { getPaper, listCoursesWithPapers, listPapers, listYears, type PaperQuery } from "@pyq/db";
 import { publicQuery } from "@/lib/db";
 
 // Public (anon) data, cached across requests. Pages stay dynamic (they read searchParams and
@@ -11,10 +11,14 @@ import { publicQuery } from "@/lib/db";
 export const TAGS = { papers: "papers", courses: "courses" } as const;
 const FALLBACK_SECONDS = 3600;
 
-export const getCourses = unstable_cache(() => publicQuery(listCourses), ["public:courses"], {
-  tags: [TAGS.courses],
-  revalidate: FALLBACK_SECONDS,
-});
+export const getCourses = unstable_cache(
+  () => publicQuery(listCoursesWithPapers),
+  ["public:courses-with-papers"],
+  {
+    tags: [TAGS.courses, TAGS.papers],
+    revalidate: FALLBACK_SECONDS,
+  },
+);
 
 export const getYears = unstable_cache(() => publicQuery(listYears), ["public:years"], {
   tags: [TAGS.papers],
