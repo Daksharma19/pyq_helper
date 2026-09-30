@@ -119,6 +119,16 @@ describe("extractPaperMeta", () => {
     });
   });
 
+  it("reads 'Term-II Examination' as T2", () => {
+    expect(extractPaperMeta("Term-II Examination 2022", [], now).term).toBe("T2");
+    expect(extractPaperMeta("Term 3 Exam, 2022", [], now).term).toBe("T3");
+  });
+
+  it("reads mid-term / mid-sem wording as T2", () => {
+    expect(extractPaperMeta("Mid Term Examination, ODD-2024", [], now).term).toBe("T2");
+    expect(extractPaperMeta("MID SEM Examination, 2022", [], now).term).toBe("T2");
+  });
+
   it("returns nothing for a blank (image-only) scan", () => {
     expect(extractPaperMeta("", courses, now)).toEqual({});
   });
@@ -142,12 +152,49 @@ CourseCode:16BINHS631 Maximum Marks:35`;
     });
   });
 
+  it("fixes OCR's R for B and I for 1 inside a JIIT code, and 'Marks;'", () => {
+    const text = "Course Code: 17R1NCI748\nCourse Code:15BIICI411\nMaximum Marks; 20";
+    expect(extractPaperMeta(text, [{ code: "15B11CI411", title: "x" }], now)).toMatchObject({
+      course_code: "15B11CI411",
+      total_marks: 20,
+    });
+    expect(extractPaperMeta("Course Code: 17R1NCI748", [], now).course_code).toBe("17B1NCI748");
+  });
+
+  it("prefers the printed semester over the one implied by an elective's code", () => {
+    const text = "B.Tech, VI Semester\nCourse Code: 21B12CS321";
+    expect(extractPaperMeta(text, [], now).semester).toBe(6);
+  });
+
+  it("prefers a code on the paper over a known title mentioned in the questions", () => {
+    const text =
+      "Big Data Ingestion (21B12CS318), Even 2026 T1\nQ2. Big Data vs Artificial Intelligence";
+    const ai = [{ code: "15B11CI514", title: "Artificial Intelligence" }];
+    expect(extractPaperMeta(text, ai, now).course_code).toBe("21B12CS318");
+  });
+
+  it("matches a known course through OCR look-alike characters", () => {
+    const cn = [{ code: "18B11CS311", title: "Computer Networks" }];
+    expect(extractPaperMeta("Course Code: 1SBLICS311", cn, now).course_code).toBe("18B11CS311");
+    expect(extractPaperMeta("Course Code: 1SBLICS311", [], now).course_code).toBe("1SBLICS311");
+  });
+
+  it("rejoins a JIIT code the text layer split with a space", () => {
+    const text = "Course Code : 15B1 1MA301\n\nCO1 recall the concepts";
+    expect(extractPaperMeta(text, [], now).course_code).toBe("15B11MA301");
+  });
+
   it("cuts the title at a slash of alternate titles", () => {
     const text = "Course Title: Probability and Random Processes/\nCourse Code: 15B11MA301";
     expect(extractPaperMeta(text, [], now)).toMatchObject({
       course_title: "Probability and Random Processes",
       semester: 3,
     });
+  });
+
+  it("counts a question number OCR'd with a letter O ('O5.' for 'Q5.')", () => {
+    const text = "Q1. a\nQ4. Write a C program\nO5. Write the output of the following code";
+    expect(extractPaperMeta(text, [], now).num_questions).toBe(5);
   });
 
   it("counts questions across all pages", () => {

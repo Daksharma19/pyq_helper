@@ -15,12 +15,19 @@ export type ExtractedMeta = {
 };
 
 // JIIT codes: 15B11MA111, 18B11EC213, 16B1NHS631, 15B17CI371. The 4th and 5th characters
-// are usually digits but can be letters ("1N"), and OCR reads "1" as "I" there.
+// are usually digits but can be letters ("1N"), and OCR reads "1" as "I" or "L" there. The
+// 3rd is the programme letter ("B"), which OCR sometimes reads as "R".
 const CODE_RE = /\b\d{2}[A-Z][0-9IL][0-9A-Z][A-Z]{2,3}\d{3}\b/g;
 
 function fixCode(raw: string): string {
   const c = raw.toUpperCase();
-  return c.slice(0, 3) + c[3]!.replace(/[IL]/, "1") + c.slice(4);
+  return (
+    c.slice(0, 2) +
+    c[2]!.replace("R", "B") +
+    c[3]!.replace(/[IL]/, "1") +
+    c[4]!.replace(/[IL]/, "1") +
+    c.slice(5)
+  );
 }
 
 /** JIIT codes carry the semester in the last three digits: 15B11MA301 → 3. */
@@ -70,25 +77,38 @@ export function extractPaperMeta(
   )?.[1];
   const labelled = label && /\d/.test(label) && COURSE_CODE_RE.test(label) ? label : undefined;
   const jiit = (c: string) => (new RegExp(`^${CODE_RE.source}$`).test(c) ? fixCode(c) : c);
+  // PDF text layers sometimes split a code with a space ("15B1 1MA301"): rejoin a JIIT one.
+  const joined = /(?:COURSE|SUBJECT|PAPER)\s*CODE\s*[:\-.]?\s*([A-Z0-9][A-Z0-9 ]{8,14})/
+    .exec(upper)?.[1]
+    ?.replace(/ /g, "")
+    .match(new RegExp(`^${CODE_RE.source.replace(/\\b/g, "")}`))?.[0];
   const codes = [
+    ...(joined ? [fixCode(joined)] : []),
     ...(labelled ? [jiit(labelled)] : []),
     ...[...upper.matchAll(CODE_RE)].map((m) => fixCode(m[0])),
   ];
+  // A code printed on the paper beats a known title found somewhere in the body ("Big Data
+  // Ingestion" papers mention "artificial intelligence"); titles help when OCR lost the code.
   const course =
     codes.find((c) => known.has(c)) ??
-    courses.find((c) => normalise(text).includes(normalise(c.title)))?.code ??
-    codes[0];
+    lookalike(codes, courses) ??
+    codes[0] ??
+    courses.find((c) => normalise(text).includes(normalise(c.title)))?.code;
   if (course) out.course_code = course;
   const title = courseTitle(text);
   if (title) out.course_title = title;
-  const semester = semesterOf(out.course_code) ?? semesterFromText(text);
+  // The printed semester wins: elective codes (21B12CS321 in semester 6) don't encode it.
+  const semester = semesterFromText(text) ?? semesterOf(out.course_code);
   if (semester) out.semester = semester;
 
-  // Term: "T2 Examination", "Test-2", or end-term / end-semester (= T3). A bare "T2"
-  // elsewhere in the text is too ambiguous to trust.
+  // Term: "T2 Examination", "Test-2", mid-term / mid-semester (= T2) or end-term /
+  // end-semester (= T3). A bare "T2" elsewhere in the text is too ambiguous to trust.
   const t =
-    /\bT\s*-?\s*([123])\s*(?:Ex\w*|Test)/i.exec(text) ?? /\bTest\s*-?\s*([123])\b/i.exec(text);
-  if (t) out.term = `T${t[1]}` as Term;
+    /\bT\s*-?\s*([123])\s*(?:Ex\w*|Test)/i.exec(text) ??
+    /\bTest\s*-?\s*([123])\b/i.exec(text) ??
+    /\bTerm\s*-?\s*(III|II|I|[123])\s*Ex/i.exec(text);
+  if (t) out.term = `T${ROMAN[t[1]!.toUpperCase()] ?? t[1]}` as Term;
+  else if (/mid\s*-?\s*(?:sem\w*|term)\s*exam/i.test(text)) out.term = "T2";
   else if (/end\s*-?\s*(?:sem\w*|term)\s*exam/i.test(text)) out.term = "T3";
 
   // Year: prefer "Odd/Even (Semester) 2023", else the first plausible year.
@@ -99,7 +119,7 @@ export function extractPaperMeta(
   const year = sem && plausible(Number(sem[1])) ? Number(sem[1]) : years[0];
   if (year) out.year = year;
 
-  const marks = /max(?:imum)?\.?\s*marks\s*[:-]?\s*(\d{1,3})\b/i.exec(text);
+  const marks = /max(?:imum)?\.?\s*marks\s*[:;-]?\s*(\d{1,3})\b/i.exec(text);
   if (marks) out.total_marks = Number(marks[1]);
 
   const questions = countQuestions(text);
@@ -123,7 +143,8 @@ const OCR_DIGITS: Record<string, string> = {
 
 /**
  * Two independent signals, taking the larger:
- * - the highest question number at a line start ("Q7.", OCR'd "QI."/"QS", or "04." for "Q4.");
+ * - the highest question number at a line start ("Q7.", OCR'd "QI."/"QS", or "04."/"O4." for
+ *   "Q4.");
  * - the number of per-question marks tags ("[4M]"), which survive OCR better than numbering.
  * Sub-parts ("(a)", "(b)") are not counted by either.
  */
@@ -132,11 +153,22 @@ export function countQuestions(text: string): number | undefined {
     ...[...text.matchAll(/(?:^|\n)\s*Q\s*[.,]?\s*([0-9IliSsOoB|]{1,2})(?![A-Za-z])/g)].map((m) =>
       Number([...m[1]!].map((c) => OCR_DIGITS[c] ?? c).join("")),
     ),
-    ...[...text.matchAll(/(?:^|\n)\s*0([1-9])\s*[.)]/g)].map((m) => Number(m[1])),
+    ...[...text.matchAll(/(?:^|\n)\s*[0Oo]([1-9])\s*[.)]/g)].map((m) => Number(m[1])),
   ].filter((n) => n > 0 && n <= 50);
   const tags = text.match(/\[\s*\d{1,2}\s*M\s*\]/gi)?.length ?? 0;
   const best = Math.max(0, tags, ...numbers);
   return best > 0 ? best : undefined;
+}
+
+/** Folds characters OCR confuses in codes (8/B/S/5, 1/I/L, 0/O) into one. */
+function ocrFold(code: string): string {
+  return code.replace(/[8S5]/g, "B").replace(/[1L]/g, "I").replace(/0/g, "O");
+}
+
+/** A known course whose code matches a read one up to OCR look-alikes ("1SBLICS311"). */
+function lookalike(codes: string[], courses: Pick<Course, "code">[]): string | undefined {
+  const folded = new Set(codes.map(ocrFold));
+  return courses.find((c) => folded.has(ocrFold(c.code)))?.code;
 }
 
 function normalise(s: string): string {
