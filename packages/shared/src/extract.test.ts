@@ -155,3 +155,13 @@ CourseCode:16BINHS631 Maximum Marks:35`;
     expect(extractPaperMeta(text, [], now).num_questions).toBe(5);
   });
 });
+
+describe("course codes in any format", () => {
+  it("takes a labelled non-JIIT code as is", () => {
+    const text = "Subject Code: CS-101\nCourse Title: Intro to Programming";
+    expect(extractPaperMeta(text, [], now)).toMatchObject({
+      course_code: "CS-101",
+      course_title: "Intro to Programming",
+    });
+  });
+});

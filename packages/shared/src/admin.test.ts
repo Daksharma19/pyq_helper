@@ -40,7 +40,11 @@ describe("courseInputSchema", () => {
       program: "B.Tech",
       semester: 1,
     });
-    expect(courseInputSchema.safeParse({ code: "CS101", title: "x", semester: 1 }).success).toBe(
+    expect(courseInputSchema.parse({ code: "cs 101", title: "x", semester: 1 }).code).toBe("CS101");
+    expect(courseInputSchema.safeParse({ code: "MA-201", title: "x", semester: 1 }).success).toBe(
+      true,
+    );
+    expect(courseInputSchema.safeParse({ code: "A/B", title: "x", semester: 1 }).success).toBe(
       false,
     );
   });

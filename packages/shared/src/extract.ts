@@ -1,5 +1,5 @@
 import type { Course, Term } from "./domain";
-import { MIN_YEAR } from "./domain";
+import { COURSE_CODE_RE, MIN_YEAR } from "./domain";
 
 /** Metadata guessed from a paper's text. Every field is optional: the admin reviews it. */
 export type ExtractedMeta = {
@@ -63,11 +63,17 @@ export function extractPaperMeta(
   // Course: a known code in the text, else a known title, else any code-shaped token.
   // A code after a "Course Code" label wins over one elsewhere in the text.
   const upper = text.toUpperCase();
-  const labelled = /COURSE\s*CODE\s*[:\-.]?\s*([0-9A-Z]{9,11})/.exec(upper)?.[1];
+  // Codes can be any format (CS101, MA-201), so a labelled one is taken as is, as long as it
+  // has a digit (not a stray word); JIIT-shaped codes also get their OCR slips fixed.
+  const label = /(?:COURSE|SUBJECT|PAPER)\s*CODE\s*[:\-.]?\s*([A-Z0-9][A-Z0-9-]{1,29})/.exec(
+    upper,
+  )?.[1];
+  const labelled = label && /\d/.test(label) && COURSE_CODE_RE.test(label) ? label : undefined;
+  const jiit = (c: string) => (new RegExp(`^${CODE_RE.source}$`).test(c) ? fixCode(c) : c);
   const codes = [
-    ...(labelled && new RegExp(CODE_RE.source).test(labelled) ? [labelled] : []),
-    ...[...upper.matchAll(CODE_RE)].map((m) => m[0]),
-  ].map(fixCode);
+    ...(labelled ? [jiit(labelled)] : []),
+    ...[...upper.matchAll(CODE_RE)].map((m) => fixCode(m[0])),
+  ];
   const course =
     codes.find((c) => known.has(c)) ??
     courses.find((c) => normalise(text).includes(normalise(c.title)))?.code ??

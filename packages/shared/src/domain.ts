@@ -3,8 +3,11 @@ export type Term = (typeof TERMS)[number];
 
 export const SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
 
-/** JIIT course codes look like 18B11EC213 / 15B11CI111 / 15B17PH171. */
-export const COURSE_CODE_RE = /^\d{2}[A-Z]\d{2}[A-Z]{2}\d{3}$/;
+/**
+ * Course codes: any format (18B11EC213, 16B1NHS631, CS101, MA-201), stored uppercase.
+ * Only letters, digits and dashes, so codes stay safe in URLs, filenames and CSVs.
+ */
+export const COURSE_CODE_RE = /^[A-Z0-9][A-Z0-9-]{1,29}$/;
 
 export const MIN_YEAR = 2000;
 

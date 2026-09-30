@@ -9,7 +9,7 @@ describe("parseBrowseFilters", () => {
   });
 
   it("drops empty and invalid values instead of throwing", () => {
-    expect(parseBrowseFilters({ semester: "9", course: "nope", term: "T4", year: "" })).toEqual({});
+    expect(parseBrowseFilters({ semester: "9", course: "no/pe", term: "T4", year: "" })).toEqual({});
   });
 
   it("normalises the subject search and drops blank ones", () => {

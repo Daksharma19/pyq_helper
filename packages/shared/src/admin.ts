@@ -4,8 +4,8 @@ import { COURSE_CODE_RE, MIN_YEAR, TERMS } from "./domain";
 const courseCode = z
   .string()
   .trim()
-  .transform((s) => s.toUpperCase())
-  .pipe(z.string().regex(COURSE_CODE_RE, "Course code looks like 18B11EC213"));
+  .transform((s) => s.toUpperCase().replace(/\s+/g, ""))
+  .pipe(z.string().regex(COURSE_CODE_RE, "Course code: 2 to 30 letters, digits or dashes"));
 
 const positiveInt = (label: string, max: number) =>
   z.coerce

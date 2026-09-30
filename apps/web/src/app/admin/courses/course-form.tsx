@@ -28,7 +28,7 @@ export function CourseForm({ course }: { course?: Course }) {
             <input
               name="code"
               required
-              placeholder="18B11EC213"
+              placeholder="e.g. 18B11EC213 or CS101"
               defaultValue={v?.code}
               className={`${inputCls} uppercase`}
             />
