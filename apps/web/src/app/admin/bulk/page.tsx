@@ -4,6 +4,8 @@ import { requireAdmin } from "@/lib/auth";
 import { BulkUpload } from "./bulk-upload";
 
 export const metadata: Metadata = { title: "Bulk upload" };
+// Server actions here read, convert and OCR uploads: allow up to 5 minutes (Vercel).
+export const maxDuration = 300;
 
 export default async function BulkPage() {
   await requireAdmin("/admin/bulk");

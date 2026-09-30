@@ -4,7 +4,7 @@
 
 - **pnpm 12 / Node 24 / Next 15 / Tailwind 4 / zod 4 / Vitest.** Latest stable at the time.
 - **No ORM**: supabase-js + generated `Database` types (see docs/decisions/0001).
-- **Local Supabase in Docker is the dev database** (`db:start`). Sample PDFs are seeded through `[storage.buckets.papers] objects_path`. The hosted flow (`seed:hosted`) is there for when we deploy.
+- **Local Supabase in Docker is the dev database** (`db:start`). Sample PDFs are seeded through `[storage.buckets.papers] objects_path`. Superseded: hosted Supabase is now the default (see docs/decisions/0005).
 - **`database.types.ts` is generated** (`db:types`) and excluded from lint and prettier.
 - **`apps/web/.env.local`** holds Supabase's well-known local demo anon key. It is gitignored anyway.
 - **Course list**: `18B11EC213 Digital Systems` is from the brief. The other codes and titles are best-effort JIIT codes and **must be checked against the official course list**. Course code format is enforced as `^\d{2}[A-Z]\d{2}[A-Z]{2}\d{3}$`.

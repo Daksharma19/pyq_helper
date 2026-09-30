@@ -11,6 +11,8 @@ import { PaperForm } from "@/components/admin/paper-form";
 import { PaperControls } from "./paper-controls";
 
 export const metadata: Metadata = { title: "Edit paper" };
+// Server actions here read, convert and OCR uploads: allow up to 5 minutes (Vercel).
+export const maxDuration = 300;
 
 type Props = {
   params: Promise<{ hash: string }>;

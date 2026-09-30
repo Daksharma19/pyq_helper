@@ -1,7 +1,9 @@
 import "server-only";
+import os from "node:os";
 import path from "node:path";
 import { createWorker, type Worker } from "tesseract.js";
 import { extractText, getDocumentProxy, renderPageAsImage } from "unpdf";
+import { onVercel } from "@/env";
 
 // Reading uploads (type detection, conversion to PDF, validation) is in lib/paper-file.ts.
 
@@ -44,11 +46,14 @@ export async function paperText(bytes: Uint8Array): Promise<{ text: string; sour
 }
 
 // One Tesseract worker per server process, created on first use; jobs queue on it.
-// English language data is downloaded once into .cache/tesseract (gitignored).
+// English language data is downloaded once into .cache/tesseract (gitignored), or the temp
+// dir on Vercel, where that's the only writable place.
 let worker: Promise<Worker> | undefined;
 function ocrWorker(): Promise<Worker> {
   worker ??= createWorker("eng", undefined, {
-    cachePath: path.join(process.cwd(), ".cache", "tesseract"),
+    cachePath: onVercel
+      ? path.join(os.tmpdir(), "tesseract")
+      : path.join(process.cwd(), ".cache", "tesseract"),
   }).catch((e: unknown) => {
     worker = undefined; // retry on the next paper instead of caching the failure
     throw e;

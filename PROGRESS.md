@@ -38,6 +38,6 @@ pnpm --filter @pyq/db db:pull     # after a migration: re-introspect Prisma sche
 - Confirmed course codes (from real papers): `18B11EC213`, `15B11MA111`, `15B11PH111`, `15B11MA301`, `15B11CI111`. Verify the rest.
 - Real scans include student names/enrollment numbers: they need redaction before going public (Phase 3 pipeline candidate).
 - OCR and document conversion run in the web server process. Move them to `apps/pipeline` + a queue for student uploads (Phase 3); serverless hosts can't run LibreOffice.
-- Hosted: create a `prisma` login role granted `anon, authenticated` (see README). `seed:hosted` is untested and there's no hosted project yet.
+- Hosted: create a `prisma` login role granted `anon, authenticated` (see README). `db:deploy` now creates it (see README, docs/decisions/0005).
 - Pagination: public 30 rows, admin 200 rows.
 - Working rules: after each step run checks and open the app; don't ask unless blocked; commit at phase end. Log defaults in `NOTES.md`.

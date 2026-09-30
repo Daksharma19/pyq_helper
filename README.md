@@ -30,44 +30,56 @@ Requires Node 24 and pnpm 12. `pnpm install` also generates the Prisma client.
 pnpm install
 ```
 
-### Database: local (needs Docker)
+### Database: hosted Supabase (default)
+
+Development and production both use hosted Supabase; no Docker needed. Ideally use two
+projects (dev and prod); the steps are the same.
+
+1. Create a Supabase project. Under Authentication -> Sign In / Providers, turn **off**
+   "Allow new users to sign up" (only admins log in). Under Authentication -> Users, add your
+   admin user (email + password, auto-confirm).
+2. Copy `packages/db/.env.example` to `packages/db/.env` and fill in `SUPABASE_DB_URL`,
+   `PRISMA_DB_PASSWORD` and `ADMIN_EMAIL`.
+3. `pnpm --filter @pyq/db db:deploy`: applies migrations (tables, RLS, storage buckets), loads
+   the course list, creates the `prisma` login role (can only act as `anon`/`authenticated`,
+   so RLS applies) and makes `ADMIN_EMAIL` an admin. Re-run it after adding a migration.
+   Local sample papers and the local admin in `seed.sql` are never sent to a hosted project.
+4. Fill `apps/web/.env.local` from `apps/web/.env.example`.
+
+`pnpm --filter @pyq/db db:pull` re-introspects `schema.prisma` after a migration.
+
+The schema lives in `packages/db/supabase/migrations` (SQL: tables, RLS, generated columns,
+buckets). `packages/db/prisma/schema.prisma` is introspected from it. Don't edit models by hand.
+
+### Database: local (optional, needs Docker)
 
 ```bash
 pnpm --filter @pyq/db db:start   # prints API URL + anon key
-pnpm --filter @pyq/db db:reset   # re-apply migrations + seed (incl. sample PDFs)
-pnpm --filter @pyq/db db:pull    # after a migration: re-introspect schema.prisma + regenerate client
+pnpm --filter @pyq/db db:reset   # migrations + courses.sql + seed.sql (sample PDFs, local admin)
 ```
 
-Env files (copy from the `.env.example` next to each):
+The RLS integration test runs only when `TEST_DATABASE_URL` is set in `packages/db/.env`.
+Point it at a local or throwaway database, never production.
 
-- `apps/web/.env.local`: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `DATABASE_URL` (server-only), optional `SOFFICE_PATH` (see Uploads)
-- `packages/db/.env`: `DATABASE_URL` (for `db:pull` and the RLS integration test)
+## Deploy (Vercel)
 
-The schema lives in `packages/db/supabase/migrations` (SQL: tables, RLS, generated columns).
-`packages/db/prisma/schema.prisma` is introspected from it. Don't edit models by hand.
+1. Import the GitHub repo in Vercel. **Root Directory: `apps/web`** (framework Next.js is
+   detected; install runs at the repo root with pnpm).
+2. Environment variables (Production): `NEXT_PUBLIC_SUPABASE_URL`,
+   `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `DATABASE_URL` (transaction pooler, port 6543, user
+   `prisma.<ref>`), and `ENABLE_EXPERIMENTAL_COREPACK=1` so Vercel uses the pinned pnpm.
+3. Deploy. Then in Supabase -> Authentication -> URL Configuration, set **Site URL** to the
+   Vercel URL (or your domain).
 
-### Database: hosted Supabase
-
-1. Create a Supabase project.
-2. Copy `packages/db/.env.example` to `packages/db/.env` and fill it in (server-side only).
-3. Apply the schema, seed data and sample PDFs: `pnpm --filter @pyq/db seed:hosted`.
-4. Create a login role for Prisma that can switch to the RLS roles, and use it in `DATABASE_URL`:
-
-   ```sql
-   create role prisma login password '<strong password>';
-   grant anon, authenticated to prisma;
-   ```
-
-5. Fill `apps/web/.env.local` (or the host's env) with the project URL, the **anon** key and `DATABASE_URL`.
+On Vercel, uploads go browser -> private `uploads` bucket -> server action (Vercel caps
+request bodies at 4.5 MB), OCR runs with up to 300 s per request, and Word/PowerPoint
+conversion is unavailable (no LibreOffice): admins upload PDFs or images instead.
 
 ## Admin
 
-- Local: `db:reset` seeds an admin, `admin@pyq.test`. The password is in `packages/db/supabase/seed.sql` (local only).
-- Hosted: create the user in Supabase Auth, then run in the SQL editor:
-
-  ```sql
-  insert into public.admins (user_id) select id from auth.users where email = 'you@example.com';
-  ```
+- Hosted: `ADMIN_EMAIL` + `db:deploy` (above). To add another admin later, create the user in
+  Supabase Auth, set `ADMIN_EMAIL` and re-run `db:deploy`.
+- Local Docker: `db:reset` seeds `admin@pyq.test`; the password is in `seed.sql` (local only).
 
 - `/admin/papers/new`: **drag and drop papers** (or pick them). See Uploads below and
   `docs/decisions/0003`.

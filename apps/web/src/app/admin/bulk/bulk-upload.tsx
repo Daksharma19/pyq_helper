@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { parseBulkCsv, type BulkRow } from "@pyq/shared";
 import { createPaper } from "@/app/admin/actions";
+import { stagedFields } from "@/lib/stage-upload";
 import { ACCEPT, hasSupportedExtension } from "@/lib/upload-formats";
 import { Notice } from "@/components/admin/notice";
 import { btnPrimary } from "@/components/admin/styles";
@@ -46,9 +47,9 @@ export function BulkUpload() {
       setStatus((s) => ({ ...s, [row.line]: { kind: "uploading" } }));
       const form = new FormData();
       for (const [k, v] of Object.entries(row.input)) form.set(k, String(v));
-      form.set("file", pdfs.get(row.file)!);
       let next: Status;
       try {
+        await stagedFields(form, pdfs.get(row.file)!);
         const res = await createPaper(null, form);
         if (res.ok && res.created) next = { kind: "done", hash: res.created };
         else if (res.existing) next = { kind: "exists", hash: res.existing };

@@ -5,6 +5,8 @@ import { requireAdmin } from "@/lib/auth";
 import { UploadQueue } from "./upload-queue";
 
 export const metadata: Metadata = { title: "Upload papers" };
+// Server actions here read, convert and OCR uploads: allow up to 5 minutes (Vercel).
+export const maxDuration = 300;
 
 export default async function NewPaperPage() {
   const { query } = await requireAdmin("/admin/papers/new");

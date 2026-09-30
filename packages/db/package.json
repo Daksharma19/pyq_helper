@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./storage": "./src/storage.ts"
   },
   "scripts": {
     "lint": "eslint .",
@@ -14,10 +15,10 @@
     "db:stop": "supabase stop --workdir .",
     "db:reset": "supabase db reset --workdir .",
     "seed:pdfs": "node scripts/make-sample-pdfs.mjs",
-    "seed:hosted": "node --env-file=.env scripts/seed-hosted.mjs",
     "db:pull": "prisma db pull && prisma format && prisma generate",
     "db:generate": "prisma generate",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "db:deploy": "node --env-file=.env scripts/deploy-hosted.mjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.0",

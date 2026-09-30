@@ -7,6 +7,7 @@ import {
   dbErrorCode,
   deleteCourse,
   deletePapers,
+  downloadStaged,
   findPaper,
   findPaperByFile,
   getAnyPaper,
@@ -15,6 +16,7 @@ import {
   newStoragePath,
   paperHash,
   removePdf,
+  removeStaged,
   sha256,
   updatePaper,
   uploadPdf,
@@ -29,6 +31,7 @@ import {
   paperInputSchema,
   type ExtractedMeta,
 } from "@pyq/shared";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireAdmin } from "@/lib/auth";
 import { readPaperFile } from "@/lib/paper-file";
 import { paperText, type TextSource } from "@/lib/pipeline";
@@ -74,6 +77,21 @@ function formValues(form: FormData): Record<string, string> {
   return out;
 }
 
+/**
+ * The uploaded file. The browser stages it in the private "uploads" bucket first
+ * (lib/stage-upload.ts) and sends only `staged` (its path) and `name`.
+ */
+async function stagedFile(storage: SupabaseClient, form: FormData): Promise<File | null> {
+  const path = form.get("staged");
+  const name = form.get("name");
+  if (typeof path !== "string" || !path) return null;
+  const blob = await downloadStaged(storage, path);
+  if (!blob) return null;
+  return new File([blob], typeof name === "string" && name ? name : "upload");
+}
+
+const stagedPath = (form: FormData) => String(form.get("staged") ?? "");
+
 /** Hashes arrive from the client (URLs, bound actions): reject anything malformed early. */
 function checkHash(hash: string): string {
   if (!PAPER_HASH_RE.test(hash)) throw new Error("Invalid paper id");
@@ -103,9 +121,9 @@ export type Analysis =
  * 4. hash the extracted identity (course|term|year) and check whether that paper exists.
  */
 export async function analyzePaper(form: FormData): Promise<Analysis> {
-  const { query } = await requireAdmin("/admin/papers/new");
-  const file = form.get("file");
-  if (!(file instanceof File)) return { error: "Choose a file." };
+  const { query, storage } = await requireAdmin("/admin/papers/new");
+  const file = await stagedFile(storage, form);
+  if (!file) return { error: "The upload didn't arrive. Try again." };
   const pre = precheckUpload(file);
   if (pre) return { error: pre };
 
@@ -154,7 +172,7 @@ export async function createPaper(_: FormState | null, form: FormData): Promise<
   const { query, storage } = await requireAdmin();
   const values = formValues(form);
   const parsed = paperInputSchema().safeParse(values);
-  const pdf = await readPaperFile(form.get("file"));
+  const pdf = await readPaperFile(await stagedFile(storage, form));
   if (!parsed.success || "error" in pdf) {
     const errors = parsed.success ? {} : firstIssues(parsed.error);
     if ("error" in pdf) errors.file = pdf.error;
@@ -183,6 +201,7 @@ export async function createPaper(_: FormState | null, form: FormData): Promise<
       insertPaper(db, { ...input, storage_path: path, file_hash }),
     );
     papersChanged();
+    await removeStaged(storage, stagedPath(form));
     return { ok: true, created, message: `Added ${label(input)}.` };
   } catch (e) {
     await removePdf(storage, path);
@@ -208,8 +227,8 @@ export async function editPaper(hash: string, _: FormState, form: FormData): Pro
   if (!current) return { errors: { _: "Paper not found." } };
 
   const parsed = paperInputSchema().safeParse(values);
-  const file = form.get("file");
-  const pdf = file instanceof File && file.size > 0 ? await readPaperFile(file) : undefined;
+  // No `staged` field = keep the current PDF.
+  const pdf = form.get("staged") ? await readPaperFile(await stagedFile(storage, form)) : undefined;
   if (!parsed.success || (pdf && "error" in pdf)) {
     const errors = parsed.success ? {} : firstIssues(parsed.error);
     if (pdf && "error" in pdf) errors.file = pdf.error;
@@ -245,6 +264,7 @@ export async function editPaper(hash: string, _: FormState, form: FormData): Pro
     throw e;
   }
   if (replacement) await removePdf(storage, current.storage_path);
+  await removeStaged(storage, stagedPath(form));
   papersChanged();
   if (newHash !== hash) redirect(`/admin/papers/${newHash}?moved=1`);
   revalidatePath(`/admin/papers/${hash}`);

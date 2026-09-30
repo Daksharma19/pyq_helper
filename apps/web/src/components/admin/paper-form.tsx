@@ -4,6 +4,7 @@ import Link from "next/link";
 import { startTransition, useActionState, useState } from "react";
 import { SEMESTERS, TERMS, type Course } from "@pyq/shared";
 import type { FormState } from "@/app/admin/actions";
+import { stagedFields } from "@/lib/stage-upload";
 import { ACCEPT } from "@/lib/upload-formats";
 import { Notice } from "./notice";
 import { btnPrimary, errorCls, inputCls } from "./styles";
@@ -20,6 +21,9 @@ export function PaperForm({ courses, action, initial = {} }: Props) {
   const v = state.values ?? initial;
   const courseSemester = (code?: string) => courses.find((c) => c.code === code)?.semester;
   const [semester, setSemester] = useState(String(courseSemester(v.course_code) ?? ""));
+  const [staging, setStaging] = useState(false);
+  const [stageError, setStageError] = useState<string>();
+  const busy = pending || staging;
 
   const visible = semester ? courses.filter((c) => String(c.semester) === semester) : courses;
   const err = state.errors ?? {};
@@ -29,9 +33,25 @@ export function PaperForm({ courses, action, initial = {} }: Props) {
   return (
     <form
       // Submit manually: React's automatic form reset would drop the chosen file on errors.
-      onSubmit={(e) => {
+      onSubmit={async (e) => {
         e.preventDefault();
+        if (busy) return;
         const data = new FormData(e.currentTarget);
+        // A replacement file goes to storage first; the action gets only its path.
+        const file = data.get("file");
+        data.delete("file");
+        setStageError(undefined);
+        if (file instanceof File && file.size > 0) {
+          setStaging(true);
+          try {
+            await stagedFields(data, file);
+          } catch {
+            setStageError("Upload failed. Try again.");
+            return;
+          } finally {
+            setStaging(false);
+          }
+        }
         startTransition(() => formAction(data));
       }}
       className="space-y-4"
@@ -148,11 +168,11 @@ export function PaperForm({ courses, action, initial = {} }: Props) {
           accept={ACCEPT}
           className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:font-medium dark:file:bg-slate-800"
         />
-        {err.file && <span className={errorCls}>{err.file}</span>}
+        {(stageError ?? err.file) && <span className={errorCls}>{stageError ?? err.file}</span>}
       </label>
 
-      <button disabled={pending} className={btnPrimary}>
-        {pending ? "Saving…" : "Save changes"}
+      <button disabled={busy} className={btnPrimary}>
+        {staging ? "Uploading…" : pending ? "Saving…" : "Save changes"}
       </button>
     </form>
   );

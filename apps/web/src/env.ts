@@ -22,6 +22,9 @@ export function serverEnv() {
   return server;
 }
 
+/** Set by Vercel at build and run time. Its filesystem is read-only except the temp dir. */
+export const onVercel = process.env.VERCEL === "1";
+
 /** Document conversion. SOFFICE_PATH is optional: LibreOffice is also found in usual places. */
 export function converterEnv() {
   return z

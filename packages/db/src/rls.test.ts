@@ -5,10 +5,12 @@ import { deletePapers, isAdmin } from "./admin";
 import { paperHash, sha256 } from "./hash";
 import { listPapers } from "./queries";
 
-// Integration test against the local Supabase database (`db:start`). It creates its own
+// Integration test against a local or throwaway Supabase database. It creates its own
 // fixture course and papers and removes them afterwards, so it doesn't depend on (or touch)
-// whatever real data is in the database. Skipped when DATABASE_URL is not set (CI).
-const url = process.env.DATABASE_URL;
+// whatever real data is in the database. It needs its own variable, TEST_DATABASE_URL, so
+// it never runs against the production database that DATABASE_URL may point at. Skipped
+// when unset (CI).
+const url = process.env.TEST_DATABASE_URL;
 const ADMIN: Caller = { role: "authenticated", userId: "a0000000-0000-4000-8000-000000000001" };
 const STRANGER: Caller = { role: "authenticated", userId: "b0000000-0000-4000-8000-000000000002" };
 

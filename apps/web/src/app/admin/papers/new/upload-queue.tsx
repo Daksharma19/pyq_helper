@@ -19,6 +19,7 @@ import {
   type FormState,
 } from "@/app/admin/actions";
 import type { TextSource } from "@/lib/pipeline";
+import { stageUpload } from "@/lib/stage-upload";
 import { ACCEPT, precheckUpload } from "@/lib/upload-formats";
 import { btnPrimary, btnSecondary, inputCls } from "@/components/admin/styles";
 
@@ -31,6 +32,8 @@ const NEW = "__new";
 type Item = {
   key: string;
   file: File;
+  /** Path in the private "uploads" bucket, once the file is staged (reused by Save). */
+  staged?: string;
   status: "analyzing" | "review" | "saving" | "saved" | "duplicate" | "error";
   values: Fields;
   /** Set while the admin is adding a course that isn't in the list. */
@@ -97,9 +100,12 @@ export function UploadQueue({ courses: initialCourses }: { courses: Course[] }) 
     // One at a time keeps the server load and the UI predictable.
     for (const it of fresh.filter((f) => f.status === "analyzing")) {
       const form = new FormData();
-      form.set("file", it.file);
       let res: Analysis;
       try {
+        const staged = await stageUpload(it.file);
+        patch(it.key, { staged });
+        form.set("staged", staged);
+        form.set("name", it.file.name);
         res = await analyzePaper(form);
       } catch {
         res = { error: "Could not analyse this file." };
@@ -174,8 +180,9 @@ export function UploadQueue({ courses: initialCourses }: { courses: Course[] }) 
     }
     const form = new FormData();
     for (const f of FIELDS) form.set(f, values[f]);
-    form.set("file", it.file);
     try {
+      form.set("staged", it.staged ?? (await stageUpload(it.file)));
+      form.set("name", it.file.name);
       const res = await createPaper(null, form);
       if (res.ok) patch(it.key, { status: "saved", link: res.created, message: res.message });
       else
